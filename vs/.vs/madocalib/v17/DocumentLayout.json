@@ -1,0 +1,53 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\denshi\\Downloads\\madocalib\\app\\vs\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2A22AA0-CB3C-4F49-998B-A9307C7B38FF}|madocalib\\madocalib.vcxproj|C:\\Users\\denshi\\Downloads\\madocalib\\app\\consapp\\rnx2rtkp\\rnx2rtkp.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2A22AA0-CB3C-4F49-998B-A9307C7B38FF}|madocalib\\madocalib.vcxproj|C:\\Users\\denshi\\Downloads\\madocalib\\src\\ephemeris.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "rnx2rtkp.c",
+              "DocumentMoniker": "C:\\Users\\denshi\\Downloads\\madocalib\\app\\consapp\\rnx2rtkp\\rnx2rtkp.c",
+              "RelativeDocumentMoniker": "..\\consapp\\rnx2rtkp\\rnx2rtkp.c",
+              "ToolTip": "C:\\Users\\denshi\\Downloads\\madocalib\\app\\consapp\\rnx2rtkp\\rnx2rtkp.c",
+              "RelativeToolTip": "..\\consapp\\rnx2rtkp\\rnx2rtkp.c",
+              "ViewState": "AQIAAJkAAAAAAAAAAAAAALEAAAAwAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000423|",
+              "WhenOpened": "2024-04-26T06:27:10.169Z",
+              "IsPinned": true,
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "ephemeris.c",
+              "DocumentMoniker": "C:\\Users\\denshi\\Downloads\\madocalib\\src\\ephemeris.c",
+              "RelativeDocumentMoniker": "..\\..\\src\\ephemeris.c",
+              "ToolTip": "C:\\Users\\denshi\\Downloads\\madocalib\\src\\ephemeris.c",
+              "RelativeToolTip": "..\\..\\src\\ephemeris.c",
+              "ViewState": "AQIAAL0BAAAAAAAAAAAAwMwBAABJAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000423|",
+              "WhenOpened": "2024-04-26T06:30:22.045Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

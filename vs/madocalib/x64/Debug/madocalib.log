@@ -1,0 +1,71 @@
+﻿  ephemeris.c
+  geoid.c
+  ionex.c
+  lambda.c
+  mdccssr.c
+  options.c
+  pntpos.c
+  postpos.c
+  ppp.c
+  ppp_ar.c
+  preceph.c
+  rinex.c
+C:\Users\denshi\Downloads\madocalib\src\rinex.c(240,35): warning C4244: 'return': 'double' から 'int' への変換です。データが失われる可能性があります。
+  rtcm.c
+  rtcm2.c
+  rtcm3.c
+  rtcm3e.c
+C:\Users\denshi\Downloads\madocalib\src\rtcm3e.c(575,11): warning C4267: '初期化中': 'size_t' から 'int' に変換しました。データが失われているかもしれません。
+C:\Users\denshi\Downloads\madocalib\src\rtcm3e.c(595,11): warning C4267: '初期化中': 'size_t' から 'int' に変換しました。データが失われているかもしれません。
+C:\Users\denshi\Downloads\madocalib\src\rtcm3e.c(596,11): warning C4267: '初期化中': 'size_t' から 'int' に変換しました。データが失われているかもしれません。
+C:\Users\denshi\Downloads\madocalib\src\rtcm3e.c(928,11): warning C4267: '初期化中': 'size_t' から 'int' に変換しました。データが失われているかもしれません。
+C:\Users\denshi\Downloads\madocalib\src\rtcm3e.c(929,11): warning C4267: '初期化中': 'size_t' から 'int' に変換しました。データが失われているかもしれません。
+C:\Users\denshi\Downloads\madocalib\src\rtcm3e.c(930,11): warning C4267: '初期化中': 'size_t' から 'int' に変換しました。データが失われているかもしれません。
+C:\Users\denshi\Downloads\madocalib\src\rtcm3e.c(931,11): warning C4267: '初期化中': 'size_t' から 'int' に変換しました。データが失われているかもしれません。
+C:\Users\denshi\Downloads\madocalib\src\rtcm3e.c(932,11): warning C4267: '初期化中': 'size_t' から 'int' に変換しました。データが失われているかもしれません。
+  rtkcmn.c
+C:\Users\denshi\Downloads\madocalib\src\rtkcmn.c(3291,24): warning C4477: 'sprintf' : 書式文字列 '%s' には、型 'char *' の引数が必要ですが、可変個引数 2 は型 'WCHAR *' です
+  C:\Users\denshi\Downloads\madocalib\src\rtkcmn.c(3291,24):
+  書式文字列に '%ls' を使用することをお勧めします
+  C:\Users\denshi\Downloads\madocalib\src\rtkcmn.c(3291,24):
+  書式文字列に '%lls' を使用することをお勧めします
+  C:\Users\denshi\Downloads\madocalib\src\rtkcmn.c(3291,24):
+  書式文字列に '%Ls' を使用することをお勧めします
+  C:\Users\denshi\Downloads\madocalib\src\rtkcmn.c(3291,24):
+  書式文字列に '%ws' を使用することをお勧めします
+  
+C:\Users\denshi\Downloads\madocalib\src\rtkcmn.c(3294,28): warning C4477: 'sprintf' : 書式文字列 '%s' には、型 'char *' の引数が必要ですが、可変個引数 2 は型 'WCHAR *' です
+  C:\Users\denshi\Downloads\madocalib\src\rtkcmn.c(3294,28):
+  書式文字列に '%ls' を使用することをお勧めします
+  C:\Users\denshi\Downloads\madocalib\src\rtkcmn.c(3294,28):
+  書式文字列に '%lls' を使用することをお勧めします
+  C:\Users\denshi\Downloads\madocalib\src\rtkcmn.c(3294,28):
+  書式文字列に '%Ls' を使用することをお勧めします
+  C:\Users\denshi\Downloads\madocalib\src\rtkcmn.c(3294,28):
+  書式文字列に '%ws' を使用することをお勧めします
+  
+C:\Users\denshi\Downloads\madocalib\src\rtkcmn.c(3351,25): warning C4133: '関数': 'char [1024]' と 'LPCWSTR' の間で型に互換性がありません。
+C:\Users\denshi\Downloads\madocalib\src\rtkcmn.c(3357,25): warning C4133: '関数': 'const char *' と 'LPCWSTR' の間で型に互換性がありません。
+  rtkpos.c
+C:\Users\denshi\Downloads\madocalib\src\rtkpos.c(1731,30): warning C4267: '=': 'size_t' から 'int' に変換しました。データが失われているかもしれません。
+  sbas.c
+  solution.c
+C:\Users\denshi\Downloads\madocalib\src\solution.c(1167,13): warning C4244: 'return': '__int64' から 'int' への変換です。データが失われる可能性があります。
+C:\Users\denshi\Downloads\madocalib\src\solution.c(1212,13): warning C4244: 'return': '__int64' から 'int' への変換です。データが失われる可能性があります。
+C:\Users\denshi\Downloads\madocalib\src\solution.c(1235,13): warning C4244: 'return': '__int64' から 'int' への変換です。データが失われる可能性があります。
+C:\Users\denshi\Downloads\madocalib\src\solution.c(1252,17): warning C4244: 'return': '__int64' から 'int' への変換です。データが失われる可能性があります。
+C:\Users\denshi\Downloads\madocalib\src\solution.c(1280,13): warning C4244: 'return': '__int64' から 'int' への変換です。データが失われる可能性があります。
+C:\Users\denshi\Downloads\madocalib\src\solution.c(1296,17): warning C4244: 'return': '__int64' から 'int' への変換です。データが失われる可能性があります。
+C:\Users\denshi\Downloads\madocalib\src\solution.c(1314,13): warning C4244: 'return': '__int64' から 'int' への変換です。データが失われる可能性があります。
+C:\Users\denshi\Downloads\madocalib\src\solution.c(1358,13): warning C4244: 'return': '__int64' から 'int' への変換です。データが失われる可能性があります。
+C:\Users\denshi\Downloads\madocalib\src\solution.c(1397,13): warning C4244: 'return': '__int64' から 'int' への変換です。データが失われる可能性があります。
+C:\Users\denshi\Downloads\madocalib\src\solution.c(1487,13): warning C4244: 'return': '__int64' から 'int' への変換です。データが失われる可能性があります。
+C:\Users\denshi\Downloads\madocalib\src\solution.c(1564,13): warning C4244: 'return': '__int64' から 'int' への変換です。データが失われる可能性があります。
+C:\Users\denshi\Downloads\madocalib\src\solution.c(1627,13): warning C4244: 'return': '__int64' から 'int' への変換です。データが失われる可能性があります。
+C:\Users\denshi\Downloads\madocalib\src\solution.c(1658,13): warning C4244: 'return': '__int64' から 'int' への変換です。データが失われる可能性があります。
+  コードを生成中...
+  コンパイル中...
+  tides.c
+  rnx2rtkp.c
+  コードを生成中...
+  madocalib.vcxproj -> C:\Users\denshi\Downloads\madocalib\app\vs\x64\Debug\madocalib.exe
