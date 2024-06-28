@@ -59,8 +59,8 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #UPDATE HISTORY
 * 2023/03/31 1.0b - The first public version as beta version
 * 2024/03/11 license updated
-* 2024/03/31 1.1b - The second public version as beta version (not open to the public)
-* 2024/07/01 1.2  - The third public version.
+* 2024/03/31 1.1b - not open to the public
+* 2024/07/01 1.2  - The second public version.
                     Support MADOCA-PPP ionospheric corrections.
 
 #NOTES
