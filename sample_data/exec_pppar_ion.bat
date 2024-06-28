@@ -11,8 +11,12 @@ set CONF=..\app\consapp\rnx2rtkp\gcc_mingw\sample_pppar_iono.conf
 set OBS=.\TSK200JPN_S_20241620000_01D_30S_MO.rnx
 set NAV=.\TSK200JPN_S_20241620000_01D_MN.rnx
 set L6E=.\2024162all.204.l6
-set L6D=.\2024162all.201.l6 rem for Japan and Eastern Australia Region
-rem set L6D=.\2024162all.200.l6 rem for Southeast Asia and Western Australia Region
+
+rem for Japan and Eastern Australia Region
+set L6D=.\2024162all.201.l6
+
+rem for Southeast Asia and Western Australia Region
+rem set L6D=.\2024162all.200.l6
 set OUT=.\result
 
 mkdir %OUT%
