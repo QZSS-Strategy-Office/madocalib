@@ -1,7 +1,7 @@
 /*------------------------------------------------------------------------------
 * options.c : options functions
 *
-*          Copyright (C) 2023 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
 *          Copyright (C) 2010-2020 by T.TAKASU, All rights reserved.
 *
 * version : $Revision:$ $Date:$
@@ -29,6 +29,9 @@
 *                             pos1-tropopt, pos1-sateph, pos1-navsys,
 *                             pos2-gloarmode,
 *           2023/02/01  1.13 branch from ver.2.4.3b34 for MADOCALIB
+*           2024/01/10  1.14 support MADOCA-PPP ionospheric corrections
+*                            add pos2-ionocorr, pos2-arsys, stats-prnbsys
+*           2024/06/06  1.15 delete stats-prnbsys.
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -92,9 +95,11 @@ EXPORT opt_t sysopts[]={
     {"pos1-exclsats",   2,  (void *)exsats_,             "prn ..."},
     {"pos1-navsys",     0,  (void *)&prcopt_.navsys,     NAVOPT },
     
+    {"pos2-ionocorr",   3,  (void *)&prcopt_.ionocorr,   SWTOPT },
     {"pos2-armode",     3,  (void *)&prcopt_.modear,     ARMOPT },
     {"pos2-gloarmode",  3,  (void *)&prcopt_.glomodear,  GAROPT },
     {"pos2-bdsarmode",  3,  (void *)&prcopt_.bdsmodear,  SWTOPT },
+    {"pos2-arsys",      0,  (void *)&prcopt_.arsys,      NAVOPT },
     {"pos2-arthres",    1,  (void *)&prcopt_.thresar[0], ""     },
     {"pos2-arthres1",   1,  (void *)&prcopt_.thresar[1], ""     },
     {"pos2-arthres2",   1,  (void *)&prcopt_.thresar[2], ""     },
@@ -146,6 +151,7 @@ EXPORT opt_t sysopts[]={
     {"stats-stdbias",   1,  (void *)&prcopt_.std[0],     "m"    },
     {"stats-stdiono",   1,  (void *)&prcopt_.std[1],     "m"    },
     {"stats-stdtrop",   1,  (void *)&prcopt_.std[2],     "m"    },
+    {"stats-uraratio",  1,  (void *)&prcopt_.uraratio,   ""     },
     {"stats-prnaccelh", 1,  (void *)&prcopt_.prn[3],     "m/s^2"},
     {"stats-prnaccelv", 1,  (void *)&prcopt_.prn[4],     "m/s^2"},
     {"stats-prnbias",   1,  (void *)&prcopt_.prn[0],     "m"    },

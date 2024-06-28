@@ -1,6 +1,7 @@
 /*------------------------------------------------------------------------------
 * lambda.c : integer ambiguity resolution
 *
+*          Copyright (C) 2024 Cabinet Office, Japan, All rights reserved.
 *          Copyright (C) 2007-2008 by T.TAKASU, All rights reserved.
 *
 * reference :
@@ -13,6 +14,8 @@
 * version : $Revision: 1.1 $ $Date: 2008/07/17 21:48:06 $
 * history : 2007/01/13 1.0 new
 *           2015/05/31 1.1 add api lambda_reduction(), lambda_search()
+*           2024/03/15 1.2 branch from ver.2.4.3b34 for MADOCALIB
+*                          Suppress screen display when LOOPMAX is reached.
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -143,7 +146,7 @@ static int search(int n, int m, const double *L, const double *D,
     free(S); free(dist); free(zb); free(z); free(step);
     
     if (c>=LOOPMAX) {
-        fprintf(stderr,"%s : search loop count overflow\n",__FILE__);
+        trace(2,"lambda search loop count overflow\n");
         return -1;
     }
     return 0;

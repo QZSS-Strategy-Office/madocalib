@@ -1,7 +1,7 @@
 /*------------------------------------------------------------------------------
 * pntpos.c : standard positioning
 *
-*          Copyright (C) 2023 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
 *          Copyright (C) 2007-2020 by T.TAKASU, All rights reserved.
 *
 * version : $Revision:$ $Date:$
@@ -25,6 +25,7 @@
 *                           use API sat2freq() to get carrier frequency
 *                           add output of velocity estimation error in estvel()
 *           2023/01/06 1.8  branch from ver.2.4.3b34 for MADOCALIB
+*           2024/01/10 1.9  fix bug on ionosphere error variance in rescode()
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -292,7 +293,7 @@ static int rescode(int iter, const obsd_t *obs, int n, const double *rs,
             }
             if ((freq=sat2freq(sat,obs[i].code[0],nav))==0.0) continue;
             dion*=SQR(FREQ1/freq);
-            vion*=SQR(FREQ1/freq);
+            vion*=SQR(SQR(FREQ1/freq));
             
             /* tropospheric correction */
             if (!tropcorr(time,nav,pos,azel+i*2,opt->tropopt,&dtrp,&vtrp)) {

@@ -1,27 +1,39 @@
 /*------------------------------------------------------------------------------
-* mdccssr.c : QZSS L6 Signal MADOCA-PPP Compact SSR message decode functions
+* mdccssr.c : QZSS L6E signal MADOCA-PPP Compact SSR message decode functions
 *
-* Copyright (C) 2023 TOSHIBA ELECTRONIC TECHNOLOGIES CORPORATION. All Rights Reserved.
+* Copyright (C) 2023-2024 TOSHIBA ELECTRONIC TECHNOLOGIES CORPORATION. All Rights Reserved.
 *
 * references :
-*     [1]  CAO IS-QZSS-MDC-001, February, 2022
+*     [1]  CAO IS-QZSS-MDC-002, November, 2023
 *
 * version : $Revision:$ $Date:$
 * history : 2023/02/01 1.0  new, for MADOCALIB from TETC original tools.
+*           2024/01/10 1.1  update references [1]
+*                           considered same message generation facility in
+*                               decode_qzss_l6emsg()
+*                           considered stream data input in input_qzssl6e()
+*                           refactored handling of _mcssr in decode_mcssr_oc(),
+*                               mc(), cb(), pb(), ura()
+*                           change the function name, with the support of L6D messages
+*                               decode_qzss_l6msg() -> decode_qzss_l6emsg()
+*                               input_qzssl6()      -> input_qzssl6e()
+*                               input_qzssl6f()     -> input_qzssl6ef()
+*           2024/02/10 1.2  fix bug on when the last byte of R-S is the same as
+*                           the first byte of the preamble in input_qzssl6e()
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
 /* constants -----------------------------------------------------------------*/
 
-#define L6PREAMB          0x1ACFFC1Du   /* QZSS L6 Message Preamble */
-#define L6BYTELEN                 218   /* QZSS L6 Message Byte Length w/o R-S CODE */
-#define L6HEAD_BITLEN              49   /* L6 Message Header Bit Length */
-#define L6DATA_BITLEN            1695   /* L6 Message Data Part Bit Length */
-#define L6DATA_BYTELEN            212   /* L6 Message Data Part Byte Length */
+#define L6PREAMB          0x1ACFFC1Du   /* QZSS L6 message preamble */
+#define L6BYTELEN                 218   /* QZSS L6 message byte length w/o R-S CODE */
+#define L6HEAD_BITLEN              49   /* L6 message header bit length */
+#define L6DATA_BITLEN            1695   /* L6 message data part bit length */
+#define L6DATA_BYTELEN            212   /* L6 message data part byte length */
 
-#define RTCM_MN_CSSR             4073   /* Compact SSR Message Number */
+#define RTCM_MN_CSSR             4073   /* Compact SSR message number */
                                     
-#define MCSSR_BYTELEN            1060   /* MADOCA-PPP Message 5 frames Byte Length */
+#define MCSSR_BYTELEN            1060   /* MADOCA-PPP message 5 frames byte length */
 
 #define MCSSR_ST_MASK               1   /* Compact SSR Mask */
 #define MCSSR_ST_OC                 2   /* Compact SSR GNSS Orbit Correction */
@@ -29,12 +41,6 @@
 #define MCSSR_ST_CB                 4   /* Compact SSR GNSS Satellite Code Bias */
 #define MCSSR_ST_PB                 5   /* Compact SSR GNSS Satellite Phase Bias */
 #define MCSSR_ST_URA                7   /* Compact SSR GNSS URA */
-
-#define MCSSR_VALID_OC             60   /* Nominal Validity Period[s] (Table 4.2.2-3) */
-#define MCSSR_VALID_CC             10
-#define MCSSR_VALID_CB             60
-#define MCSSR_VALID_PB             60
-#define MCSSR_VALID_URA            60
 
 #define MCSSR_MAX_SYS               5   /* GNSS ID (Table 4.2.2-7) w/o SBS */
 #define MCSSR_SYS_GPS               0
@@ -61,7 +67,7 @@
 #define MCSSR_INVALID_13BIT     -4096
 #define MCSSR_INVALID_11BIT     -1024
 
-#define MCSSR_MAX_PRN_CHECK         7   /* Max track MADOCA-PPP signal for PRN auto selection */
+#define MCSSR_MAX_PRN               7   /* Max defined MADOCA-PPP L6E signal (Table 3-1) */
 
 /* SSR update intervals (Table 4.2.2-6) --------------------------------------*/
 static const double ssrudint[16]={
@@ -103,7 +109,7 @@ typedef struct {
     int prn;                        /* current Msg. PRN */
     int prn_chk_cnt;                /* check counter for PRN auto selection */
     uint8_t buff[MCSSR_BYTELEN];    /* Compact-SSR Message */
-    int ibuff;                      /* Indicate the end of buff */
+    int ibuff;                      /* indicate the end of buff */
     int satlist[MAXSAT];            /* 0 : invalid, 1... : satno(G01...) */
     int gidlist[MAXSAT];            /* GNSS ID */
     int cellmask[MAXSAT];           /* Cellmask */
@@ -122,15 +128,15 @@ typedef struct {
 mcssr_t _mcssr;
 
 /* count 16 bit flags --------------------------------------------------------*/
-static int flgcnt16(uint16_t flg)
+static int flgcnt16(const uint16_t flg)
 {
     int i,cnt=0;
 
-    for (i=0;i<16;i++) if((flg>>i) & 0x1) cnt++;
+    for (i = 0; i < 16; i++) if((flg >> i) & 0x1) cnt++;
     return cnt;
 }
 /* ---------------------------------------------------------------------------*/
-static int gnssid2sys(int gnssid)
+static int gnssid2sys(const int gnssid)
 {
     switch(gnssid){
         case MCSSR_SYS_GPS : return SYS_GPS;
@@ -142,7 +148,7 @@ static int gnssid2sys(int gnssid)
     return -1;
 }
 /* ---------------------------------------------------------------------------*/
-static int svmask2list(uint64_t mask, int gnssid, int *satlist, int *gidlist)
+static int svmask2list(const uint64_t mask, const int gnssid, int *satlist, int *gidlist)
 {
     int i,offp,ns=0;
     uint64_t svbit = (uint64_t)1 << (MCSSR_MAX_SATMASK - 1);
@@ -160,7 +166,7 @@ static int svmask2list(uint64_t mask, int gnssid, int *satlist, int *gidlist)
 }
 
 /* ---------------------------------------------------------------------------*/
-static int sigmask2list(uint16_t mask, int gnssid, int *siglist)
+static int sigmask2list(const uint16_t mask, const int gnssid, int *siglist)
 {
     int i,nsig=0;
     const uint8_t *sigs;
@@ -199,9 +205,9 @@ static void adjweek(gtime_t *gt, double tow)
     *gt = gpst2time(week, tow);
 }
 
-/* decode MADOCA-PPP L6 CSSR header ------------------------------------------*/
-static int decode_mcssr_head(mcssr_t *mc, int *sync, int *iod, int *ep,
-                             double *udint, int i, int st)
+/* decode MADOCA-PPP L6E CSSR header -----------------------------------------*/
+static int decode_mcssr_head(const mcssr_t *mc, int *sync, int *iod, int *ep,
+                             double *udint, int i, const int st)
 {
     int n, udi;
 
@@ -212,12 +218,12 @@ static int decode_mcssr_head(mcssr_t *mc, int *sync, int *iod, int *ep,
     *iod   = getbitu(mc->buff, i, 4); i+=4; /* IOD SSR */
     *udint = ssrudint[udi];
 
-    trace(4,"decode_mcssr_head: st=%d, ep=%d, udi=%d, sync=%d, iod=%d\n",
+    trace(4,"decode_mcssr_head: st=%d,ep=%d,udi=%d,sync=%d,iod=%d\n",
         st, *ep, udi, *sync, *iod);
     return i;
 }
 
-/* decode MADOCA-PPP L6 CSSR ST1 mask message --------------------------------*/
+/* decode MADOCA-PPP L6E CSSR ST1 mask message -------------------------------*/
 static int decode_mcssr_mask(mcssr_t *mc, int i)
 {
     int j, k, sync, iod, ep, ngnss, gnssid, cmaflg, nsat, nsig;
@@ -261,7 +267,7 @@ static int decode_mcssr_mask(mcssr_t *mc, int i)
         nsat = svmask2list (svmask,  gnssid,&mc->satlist[mc->ns], &mc->gidlist[mc->ns]);
         nsig = sigmask2list(sigmask, gnssid, mc->siglist[gnssid]);
 
-        trace(4,"decode_mcssr_mask: gnssid=%d, svmask=0x%02X%08X, sigmask=0x%X, cmaflg=%d, nsat=%d, nsig=%d\n",
+        trace(4,"decode_mcssr_mask: gnssid=%d,svmask=0x%02X%08X,sigmask=0x%X,cmaflg=%d,nsat=%d,nsig=%d\n",
             gnssid, (uint8_t)(svmask>>32), (uint32_t)(svmask), sigmask, cmaflg, nsat, nsig);
 
         if(cmaflg) {
@@ -269,7 +275,7 @@ static int decode_mcssr_mask(mcssr_t *mc, int i)
                 cellmask = getbitu(mc->buff, i, nsig); i+=nsig; /* Cell-mask */
                 mc->cellmask[mc->ns + k] = cellmask;
                 mc->ncell[mc->ns + k] = flgcnt16(cellmask);
-                trace(4,"decode_mcssr_mask: k=%d, cellmask=0x%X, ncell=%2d\n",
+                trace(4,"decode_mcssr_mask: k=%d,cellmask=0x%X,ncell=%2d\n",
                     k,cellmask,mc->ncell[mc->ns + k]);
             }
         }
@@ -286,7 +292,7 @@ static int decode_mcssr_mask(mcssr_t *mc, int i)
     return i;
 }
 
-/* decode MADOCA-PPP L6 CSSR ST2 orbit correction ----------------------------*/
+/* decode MADOCA-PPP L6E CSSR ST2 orbit correction ---------------------------*/
 static int decode_mcssr_oc(mcssr_t *mc, ssr_t *ssr, int i, int apply)
 {
     int j, k, n, sync, iod, ep, sat, iode, deph[3];
@@ -294,17 +300,17 @@ static int decode_mcssr_oc(mcssr_t *mc, ssr_t *ssr, int i, int apply)
     char satid[8];
 
     i = decode_mcssr_head(mc, &sync, &iod, &ep, &udint, i, MCSSR_ST_OC);
-    if(_mcssr.tow0 < 0) {
-        trace(2,"decode_mcssr_oc :%s,unprocessed mask\n",
-            time_str(_mcssr.gt,3));
+    if(mc->tow0 < 0) {
+        trace(2,"decode_mcssr_oc: %s,unprocessed mask\n",
+            time_str(mc->gt,3));
         apply=0;
     }
     else {
         if(mc->ep0 > ep) ep += 3600;
         adjweek(&mc->gt, mc->tow0 + ep);
-        if(_mcssr.iod != iod) {
-            trace(2,"decode_mcssr_oc :%s,iod mismatch %d != %d\n",
-                time_str(_mcssr.gt,3),_mcssr.iod,iod);
+        if(mc->iod != iod) {
+            trace(2,"decode_mcssr_oc: %s,iod mismatch %d != %d\n",
+                time_str(mc->gt,3),mc->iod,iod);
             apply=0;
         }
     }
@@ -317,8 +323,8 @@ static int decode_mcssr_oc(mcssr_t *mc, ssr_t *ssr, int i, int apply)
 
         sat=mc->satlist[j];
         satno2id(sat, satid);
-        trace(4,"decode_mcssr_oc :%s,i=%4d,j=%3d,sat=%s,iode=%4d,deph=%6d,%6d,%6d,%8.4f,%8.4f,%8.4f\n",
-            time_str(_mcssr.gt,3),i,j,satid,iode,deph[0],deph[1],deph[2],
+        trace(4,"decode_mcssr_oc: %s,i=%4d,j=%3d,sat=%s,iode=%4d,deph=%6d,%6d,%6d,%8.4f,%8.4f,%8.4f\n",
+            time_str(mc->gt,3),i,j,satid,iode,deph[0],deph[1],deph[2],
             deph[0]*0.0016,deph[1]*0.0064,deph[2]*0.0064);
 
         if(sat == 0) continue; /* unsupprted sat */
@@ -341,7 +347,7 @@ static int decode_mcssr_oc(mcssr_t *mc, ssr_t *ssr, int i, int apply)
     return i;
 }
 
-/* decode MADOCA-PPP L6 CSSR ST3 clock correction ----------------------------*/
+/* decode MADOCA-PPP L6E CSSR ST3 clock correction ---------------------------*/
 static int decode_mcssr_cc(mcssr_t *mc, ssr_t *ssr, int i, int apply)
 {
     int j, sync, iod, ep, sat, dclk;
@@ -349,17 +355,17 @@ static int decode_mcssr_cc(mcssr_t *mc, ssr_t *ssr, int i, int apply)
     char satid[8];
 
     i = decode_mcssr_head(mc, &sync, &iod, &ep, &udint, i, MCSSR_ST_CC);
-    if(_mcssr.tow0 < 0) {
-        trace(2,"decode_mcssr_cc :%s,unprocessed mask\n",
-            time_str(_mcssr.gt,3));
+    if(mc->tow0 < 0) {
+        trace(2,"decode_mcssr_cc: %s,unprocessed mask\n",
+            time_str(mc->gt,3));
         apply=0;
     }
     else {
         if(mc->ep0 > ep) ep += 3600;
         adjweek(&mc->gt, mc->tow0 + ep);
-        if(_mcssr.iod != iod) {
-            trace(2,"decode_mcssr_cc :%s,iod mismatch %d != %d\n",
-                time_str(_mcssr.gt,3),_mcssr.iod,iod);
+        if(mc->iod != iod) {
+            trace(2,"decode_mcssr_cc : %s,iod mismatch %d != %d\n",
+                time_str(mc->gt,3),mc->iod,iod);
             apply=0;
         }
     }
@@ -369,8 +375,8 @@ static int decode_mcssr_cc(mcssr_t *mc, ssr_t *ssr, int i, int apply)
         sat=mc->satlist[j];
         satno2id(sat, satid);
 
-        trace(4,"decode_mcssr_cc :%s,i=%4d,j=%3d,sat=%s,dclk=%6d,%8.4f\n",
-            time_str(_mcssr.gt,3),i,j,satid,dclk,dclk*0.0016);
+        trace(4,"decode_mcssr_cc: %s,i=%4d,j=%3d,sat=%s,dclk=%6d,%8.4f\n",
+            time_str(mc->gt,3),i,j,satid,dclk,dclk*0.0016);
 
         if(sat == 0) continue; /* unsupprted sat */
         if(dclk == MCSSR_INVALID_15BIT) continue; /* invalid value */
@@ -388,7 +394,7 @@ static int decode_mcssr_cc(mcssr_t *mc, ssr_t *ssr, int i, int apply)
     return i;
 }
 
-/* decode MADOCA-PPP L6 CSSR ST4 code bias -----------------------------------*/
+/* decode MADOCA-PPP L6E CSSR ST4 code bias ----------------------------------*/
 static int decode_mcssr_cb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
 {
     int j, k, sync, iod, ep, sat, nsig, mask, cb, flg;
@@ -396,22 +402,22 @@ static int decode_mcssr_cb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
     char satid[8];
 
     i = decode_mcssr_head(mc, &sync, &iod, &ep, &udint, i, MCSSR_ST_CB);
-    if(_mcssr.tow0 < 0) {
-        trace(2,"decode_mcssr_cb :%s,unprocessed mask\n",
-            time_str(_mcssr.gt,3));
+    if(mc->tow0 < 0) {
+        trace(2,"decode_mcssr_cb: %s,unprocessed mask\n",
+            time_str(mc->gt,3));
         apply=0;
     }
     else {
         if(mc->ep0 > ep) ep += 3600;
         adjweek(&mc->gt, mc->tow0 + ep);
-        if(_mcssr.iod != iod) {
-            trace(2,"decode_mcssr_cb :%s,iod mismatch %d != %d%d\n",
-                time_str(_mcssr.gt,3),_mcssr.iod,iod);
+        if(mc->iod != iod) {
+            trace(2,"decode_mcssr_cb: %s,iod mismatch %d != %d\n",
+                time_str(mc->gt,3),mc->iod,iod);
             apply=0;
         }
     }
     for (j = 0; j < mc->ns; j++) {
-        for (k=0;k<MAXCODE;k++) cbias[k]=0.0;
+        for (k = 0; k < MAXCODE; k++) cbias[k]=0.0;
         sat = mc->satlist[j];
         satno2id(sat, satid);
         nsig = mc->nsig[mc->gidlist[j]];
@@ -419,8 +425,8 @@ static int decode_mcssr_cb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
         for (k = 0; k < nsig; k++) {
             if((flg = (mc->cellmask[j] & mask))) {
                 cb = getbits(mc->buff, i, 11); i+=11; /* Code Bias */
-                trace(4,"decode_mcssr_cb :%s,i=%4d,j=%3d,k=%2d,sat=%s,flg=0x%2X,sig=%2d,cb=%5d,%6.2f\n",
-                    time_str(_mcssr.gt,3),i,j,k,satid,flg,mc->siglist[mc->gidlist[j]][k],cb,cb*0.02);
+                trace(4,"decode_mcssr_cb: %s,i=%4d,j=%3d,k=%2d,sat=%s,flg=0x%2X,sig=%2d,cb=%5d,%6.2f\n",
+                    time_str(mc->gt,3),i,j,k,satid,flg,mc->siglist[mc->gidlist[j]][k],cb,cb*0.02);
 
                 if(sat == 0) continue; /* unsupprted sat */
                 if(cb == MCSSR_INVALID_11BIT) continue; /* invalid value */
@@ -433,14 +439,14 @@ static int decode_mcssr_cb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
             ssr[sat-1].t0[4]   = mc->gt;
             ssr[sat-1].udi[4]  = udint;
             ssr[sat-1].iod[4]  = iod;
-            for (k=0;k<MAXCODE;k++) ssr[sat-1].cbias[k]=(float)cbias[k];
+            for (k = 0; k < MAXCODE; k++) ssr[sat-1].cbias[k]=(float)cbias[k];
             ssr[sat-1].update=1;
         }
     }
     return i;
 }
 
-/* decode MADOCA-PPP L6 CSSR ST5 phase bias ----------------------------------*/
+/* decode MADOCA-PPP L6E CSSR ST5 phase bias ---------------------------------*/
 static int decode_mcssr_pb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
 {
     int j, k, sync, iod, ep, sat, nsig, mask, pb, di, flg;
@@ -448,22 +454,22 @@ static int decode_mcssr_pb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
     char satid[8];
 
     i = decode_mcssr_head(mc, &sync, &iod, &ep, &udint, i, MCSSR_ST_PB);
-    if(_mcssr.tow0 < 0) {
-        trace(2,"decode_mcssr_pb :%s,unprocessed mask\n",
+    if(mc->tow0 < 0) {
+        trace(2,"decode_mcssr_pb: %s,unprocessed mask\n",
             time_str(_mcssr.gt,3));
         apply=0;
     }
     else {
         if(mc->ep0 > ep) ep += 3600;
         adjweek(&mc->gt, mc->tow0 + ep);
-        if(_mcssr.iod != iod) {
-            trace(2,"decode_mcssr_pb :%s,iod mismatch %d != %d%d\n",
-                time_str(_mcssr.gt,3),_mcssr.iod,iod);
+        if(mc->iod != iod) {
+            trace(2,"decode_mcssr_pb: %s,iod mismatch %d != %d\n",
+                time_str(mc->gt,3),mc->iod,iod);
             apply=0;
         }
     }
     for (j = 0; j < mc->ns; j++) {
-        for (k=0;k<MAXCODE;k++) pbias[k]=0.0;
+        for (k = 0;k<MAXCODE;k++) pbias[k]=0.0;
         sat = mc->satlist[j];
         satno2id(sat, satid);
         nsig = mc->nsig[mc->gidlist[j]];
@@ -473,8 +479,8 @@ static int decode_mcssr_pb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
                 pb = getbits(mc->buff, i, 15); i+=15; /* Phase Bias */
                 di = getbitu(mc->buff, i,  2); i+= 2; /* Discontinuity Indicator */
 
-                trace(4,"decode_mcssr_pb :%s,i=%4d,j=%3d,k=%2d,sat=%s,flg=0x%2X,sig=%2d,di=%d,pb=%5d,%7.3f\n",
-                    time_str(_mcssr.gt,3),i,j,k,satid,flg,mc->siglist[mc->gidlist[j]][k],di,pb,pb*0.001);
+                trace(4,"decode_mcssr_pb: %s,i=%4d,j=%3d,k=%2d,sat=%s,flg=0x%2X,sig=%2d,di=%d,pb=%5d,%7.3f\n",
+                    time_str(mc->gt,3),i,j,k,satid,flg,mc->siglist[mc->gidlist[j]][k],di,pb,pb*0.001);
 
                 if(sat == 0) continue; /* unsupprted sat */
                 if(pb == MCSSR_INVALID_15BIT) continue; /* invalid value */
@@ -497,7 +503,7 @@ static int decode_mcssr_pb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
     return i;
 }
 
-/* decode MADOCA-PPP L6 CSSR ST7 URA -----------------------------------------*/
+/* decode MADOCA-PPP L6E CSSR ST7 URA ----------------------------------------*/
 static int decode_mcssr_ura(mcssr_t *mc, ssr_t *ssr, int i, int apply)
 {
     int j, sync, iod, ep, sat, ura;
@@ -505,17 +511,17 @@ static int decode_mcssr_ura(mcssr_t *mc, ssr_t *ssr, int i, int apply)
     char satid[8];
 
     i = decode_mcssr_head(mc, &sync, &iod, &ep, &udint, i, MCSSR_ST_URA);
-    if(_mcssr.tow0 < 0) {
-        trace(2,"decode_mcssr_ura :%s,unprocessed mask\n",
-            time_str(_mcssr.gt,3));
+    if(mc->tow0 < 0) {
+        trace(2,"decode_mcssr_ura: %s,unprocessed mask\n",
+            time_str(mc->gt,3));
         apply=0;
     }
     else {
         if(mc->ep0 > ep) ep += 3600;
         adjweek(&mc->gt, mc->tow0 + ep);
-        if(_mcssr.iod != iod) {
-            trace(2,"decode_mcssr_ura :%s,iod mismatch %d != %d\n",
-                time_str(_mcssr.gt,3),_mcssr.iod,iod);
+        if(mc->iod != iod) {
+            trace(2,"decode_mcssr_ura: %s,iod mismatch %d != %d\n",
+                time_str(mc->gt,3),mc->iod,iod);
             apply=0;
         }
     }
@@ -525,8 +531,8 @@ static int decode_mcssr_ura(mcssr_t *mc, ssr_t *ssr, int i, int apply)
         sat=mc->satlist[j];
         satno2id(sat, satid);
 
-        trace(4,"decode_mcssr_ura :%s,i=%4d,j=%3d,sat=%s,ura=0x%02X\n",
-            time_str(_mcssr.gt,3),i,j,satid,ura);
+        trace(4,"decode_mcssr_ura: %s,i=%4d,j=%3d,sat=%s,ura=0x%02X\n",
+            time_str(mc->gt,3),i,j,satid,ura);
 
         if(sat == 0) continue; /* unsupprted sat */
         if(apply) {
@@ -540,13 +546,13 @@ static int decode_mcssr_ura(mcssr_t *mc, ssr_t *ssr, int i, int apply)
     return i;
 }
 
-/* decode QZSS L6 message ----------------------------------------------------
-* decode QZSS L6 message and convert to RTCM SSR
+/* decode QZSS L6E message ---------------------------------------------------
+* decode QZSS L6E message and convert to RTCM SSR
 * args   : rtcm_t *rtcm IO   rtcm control struct
 * return : status (-1: error message, 0: no message, 10: input ssr messages)
 * note   : before calling the function, init_mcssr()
 *-----------------------------------------------------------------------------*/
-extern int decode_qzss_l6msg(rtcm_t *rtcm)
+extern int decode_qzss_l6emsg(rtcm_t *rtcm)
 {
     unsigned int preamb,prn,type,alert,vid,mgfid,csid,anme,si;
     int i=0,n,ibuff,mn,st,apply,ret,optprn;
@@ -554,41 +560,41 @@ extern int decode_qzss_l6msg(rtcm_t *rtcm)
     uint8_t mask;
 
     /* decode L6 message header (49 bits) */
-    preamb=getbitu(rtcm->buff,i,32); i+=32; /* Preamble */
-    prn   =getbitu(rtcm->buff,i, 8); i+= 8; /* PRN */
-    type  =getbitu(rtcm->buff,i, 8);        /* L6 Msg. Type ID */
-    vid   =getbitu(rtcm->buff,i, 3); i+= 3; /* Vendor ID(2:MADOCA-PPP) */
-    mgfid =getbitu(rtcm->buff,i, 2); i+= 2; /* Meg. Gen. Facility ID(0-1:Hitachi-Ota,2-3:Kobe) */
-    csid  =getbitu(rtcm->buff,i, 1); i+= 1; /* Correction Service ID(0:Clock/Ephemeris) */
-    anme  =getbitu(rtcm->buff,i, 1); i+= 1; /* Applicable Nav. Msg. Ext.(0:Default,1:CNAV/CNAV2) */
-    si    =getbitu(rtcm->buff,i, 1); i+= 1; /* Subframe Indicator(0:others,1:First Data) */
-    alert =getbitu(rtcm->buff,i, 1); i+= 1; /* Alert Flag(1:Alert) */
+    preamb=getbitu(rtcm->buff, i, 32); i+=32; /* Preamble */
+    prn   =getbitu(rtcm->buff, i,  8); i+= 8; /* PRN */
+    type  =getbitu(rtcm->buff, i,  8);        /* L6 Msg. Type ID */
+    vid   =getbitu(rtcm->buff, i,  3); i+= 3; /* Vendor ID(2:MADOCA-PPP) */
+    mgfid =getbitu(rtcm->buff, i,  2); i+= 2; /* Msg. Gen. Facility ID(0-1:Hitachi-Ota,2-3:Kobe) */
+    csid  =getbitu(rtcm->buff, i,  1); i+= 1; /* Correction Service ID(0:Clock/Ephemeris) */
+    anme  =getbitu(rtcm->buff, i,  1); i+= 1; /* Applicable Nav. Msg. Ext.(0:Default,1:CNAV/CNAV2) */
+    si    =getbitu(rtcm->buff, i,  1); i+= 1; /* Subframe Indicator(0:others,1:First Data) */
+    alert =getbitu(rtcm->buff, i,  1); i+= 1; /* Alert Flag(1:Alert) */
     
-    trace(3,"decode_qzss_l6msg : %s,preamb=0x%08X,prn=%d,type=0x%X(vid=%d,mgfid=%d,csid=%d,anme=%d,si=%d),alert=%d\n",
+    trace(3,"decode_qzss_l6emsg: %s,preamb=0x%08X,prn=%d,type=0x%X(vid=%d,mgfid=%d,csid=%d,anme=%d,si=%d),alert=%d\n",
         time_str(_mcssr.gt,3),preamb,prn,type,vid,mgfid,csid,anme,si,alert);
 
     if (preamb != L6PREAMB) {
-        trace(2,"decode_qzss_l6msg : %s,invalid preamb=0x%08X\n",
+        trace(2,"decode_qzss_l6emsg: %s,invalid preamb=0x%08X\n",
             time_str(_mcssr.gt,3),preamb);
         return -1;
     }
 
     if (alert) {
         if (strstr(rtcm->opt,"-IGNORE_MCSSR_ALERT")) {
-            trace(3,"decode_qzss_l6msg : ignore alert\n",time_str(_mcssr.gt,3));
+            trace(3,"decode_qzss_l6emsg: ignore alert\n",time_str(_mcssr.gt,3));
         }
         else {
-            trace(2,"decode_qzss_l6msg : alert\n",time_str(_mcssr.gt,3));
+            trace(2,"decode_qzss_l6emsg: alert\n",time_str(_mcssr.gt,3));
             return -1;
         }
     }
 
-    if(vid!=2) return 0;           /* unsupport vendor ID */
+    if(vid != 2) return 0;           /* unsupport vendor ID */
 
     if ((str = strstr(rtcm->opt,"-MCSSR_PRN"))) {
         optprn = atoi(strstr(str,"=")+1);
         if(optprn != prn) {
-            trace(3,"decode_qzss_l6msg : -MCSSR_PRN=%d\n",optprn);
+            trace(3,"decode_qzss_l6emsg: -MCSSR_PRN=%d\n",optprn);
             return -1;
         }
     }
@@ -599,13 +605,13 @@ extern int decode_qzss_l6msg(rtcm_t *rtcm)
         else {
             if(_mcssr.prn != prn) {
                 _mcssr.prn_chk_cnt++;
-                trace(3,"decode_qzss_l6msg : prn mismatch _mcssr.prn=%d,prn=%d,cnt=%d\n",
+                trace(3,"decode_qzss_l6emsg: prn mismatch _mcssr.prn=%d,prn=%d,cnt=%d\n",
                     _mcssr.prn,prn,_mcssr.prn_chk_cnt);
-                if(_mcssr.prn_chk_cnt < MCSSR_MAX_PRN_CHECK) {
+                if(_mcssr.prn_chk_cnt < MCSSR_MAX_PRN) {
                     return -1;
                 }
                 else {
-                    trace(2,"decode_qzss_l6msg :%s,prn switched %d -> %d\n",
+                    trace(2,"decode_qzss_l6emsg: %s,prn switched %d -> %d\n",
                         time_str(_mcssr.gt,3),_mcssr.prn,prn);
                     _mcssr.prn = prn;
                 }
@@ -614,23 +620,23 @@ extern int decode_qzss_l6msg(rtcm_t *rtcm)
         _mcssr.prn_chk_cnt = 0;
     }
 
-    if(si==1) _mcssr.maxframe = 0; /* Subframe Indicator : First Data */
+    if(si == 1) _mcssr.maxframe = 0; /* Subframe Indicator : First Data */
 
     /* frame recognition */
     if(_mcssr.maxframe <= 0) {
-        mn = getbitu(rtcm->buff,   i, 12); /* Message Number(note:not i++) */
-        st = getbitu(rtcm->buff,i+12,  4); /* Message Sub Type ID */
+        mn = getbitu(rtcm->buff,    i, 12); /* Message Number(note:not i++) */
+        st = getbitu(rtcm->buff, i+12,  4); /* Message Sub Type ID */
         if(mn != RTCM_MN_CSSR) {
-            trace(2,"decode_qzss_l6msg :%s,invalid mn=%d\n",
+            trace(2,"decode_qzss_l6emsg: %s,invalid mn=%d\n",
                 time_str(_mcssr.gt,3),mn);
             return -1;
         }
         if((_mcssr.maxframe = framelen[st]) < 1) {
-            trace(2,"decode_qzss_l6msg :%s,invalid frame start st=%d\n",
+            trace(2,"decode_qzss_l6emsg: %s,invalid frame start st=%d\n",
                 time_str(_mcssr.gt,3),st);
             return -1;
         }
-        trace(3,"decode_qzss_l6msg : %s,mn=%d,st=%d,maxframe=%d\n",
+        trace(3,"decode_qzss_l6emsg: %s,mn=%d,st=%d,maxframe=%d\n",
             time_str(_mcssr.gt,3),mn,st,_mcssr.maxframe);
         _mcssr.frame=0;
         _mcssr.ibuff=0;
@@ -638,7 +644,7 @@ extern int decode_qzss_l6msg(rtcm_t *rtcm)
 
     /* save data part (1695 bits) */
     _mcssr.frame++;
-    trace(3,"decode_qzss_l6msg : %s,maxframe=%d,frame=%d\n",
+    trace(3,"decode_qzss_l6emsg: %s,maxframe=%d,frame=%d\n",
         time_str(_mcssr.gt,3),_mcssr.maxframe,_mcssr.frame);
     switch(_mcssr.frame){
         case 1: ibuff=  0; n = 8; mask = 0xFE; break;
@@ -646,7 +652,7 @@ extern int decode_qzss_l6msg(rtcm_t *rtcm)
         case 3: ibuff=423; n = 2; mask = 0xF8; break;
         case 4: ibuff=635; n = 3; mask = 0xF0; break;
         case 5: ibuff=847; n = 4; mask = 0xE0; break;
-        default:trace(3,"decode_qzss_l6msg : invalid frame\n"); return -1;
+        default:trace(3,"decode_qzss_l6emsg: invalid frame\n"); return -1;
     }
     _mcssr.buff[ibuff++] |= (unsigned char)getbitu(rtcm->buff, i, n); i += n;
     while (i < L6HEAD_BITLEN + L6DATA_BITLEN) {
@@ -659,15 +665,15 @@ extern int decode_qzss_l6msg(rtcm_t *rtcm)
     ret=10; /* input ssr messages */
     i=0;
     while(i < L6DATA_BITLEN * _mcssr.maxframe) {
-        mn = getbitu(_mcssr.buff,i,12); i+=12; /* Message Number */
+        mn = getbitu(_mcssr.buff, i, 12); i+=12; /* Message Number */
         if(mn != RTCM_MN_CSSR) continue;
-        st = getbitu(_mcssr.buff,i, 4); i+= 4; /* Message Sub Type ID */
+        st = getbitu(_mcssr.buff, i,  4); i+= 4; /* Message Sub Type ID */
         if((st != MCSSR_ST_MASK) && (st != MCSSR_ST_OC) && 
            (st != MCSSR_ST_CC)   && (st != MCSSR_ST_CB) &&
            (st != MCSSR_ST_PB)   && (st != MCSSR_ST_URA)) continue;
         if (st == MCSSR_ST_MASK) {
             if(_mcssr.mgfid != mgfid) {
-                trace(2,"decode_qzss_l6msg :%s,mgfid switched %d -> %d\n",
+                trace(2,"decode_qzss_l6emsg: %s,mgfid switched %d -> %d\n",
                     time_str(_mcssr.gt,3),_mcssr.mgfid,mgfid);
                 _mcssr.mgfid = mgfid;
             }
@@ -675,8 +681,9 @@ extern int decode_qzss_l6msg(rtcm_t *rtcm)
         }
         else {
             apply = 1;
-            if(_mcssr.mgfid != mgfid) {
-                trace(2,"decode_qzss_l6msg :%s,st=%d,mgfid mismatch %d != %d\n",
+            /* Note, ref[1] 4.2.1(3) ID 0 and 2 are the same, 1 and 3 are the same. */
+            if((_mcssr.mgfid & 0x1) != (mgfid & 0x1)) {
+                trace(2,"decode_qzss_l6emsg: %s,st=%d,mgfid mismatch %d != %d\n",
                     time_str(_mcssr.gt,3),st,_mcssr.mgfid,mgfid);
                 apply = 0;
             }
@@ -698,21 +705,20 @@ extern int decode_qzss_l6msg(rtcm_t *rtcm)
                     i = decode_mcssr_ura(&_mcssr, rtcm->ssr, i, apply);
                     break;
             default :
-                trace(2,"decode_qzss_l6msg : invalid st=%d\n",st);
+                trace(2,"decode_qzss_l6emsg: invalid st=%d\n",st);
                 ret = -1;
                 break;
             }
         }
         if(i<0) {
-            trace(2,"decode_qzss_l6msg : decode error st=%d\n",st);
+            trace(2,"decode_qzss_l6emsg: decode error st=%d\n",st);
             ret = -1;
             break;
         }
         rtcm->time = _mcssr.gt;
     }
-    _mcssr.prn = -1;
     _mcssr.maxframe = 0;
-    trace(4,"decode_qzss_l6msg : %s,frames=%d\n",
+    trace(4,"decode_qzss_l6emsg: %s,frames=%d\n",
         time_str(_mcssr.gt,3),_mcssr.frame);
     return ret; 
 }
@@ -722,7 +728,7 @@ extern int decode_qzss_l6msg(rtcm_t *rtcm)
 * args   : gtime_t *gt   I    GPST for week number determination
 * return : none
 *-----------------------------------------------------------------------------*/
-extern void init_mcssr(gtime_t gt)
+extern void init_mcssr(const gtime_t gt)
 {
     _mcssr.gt    = gt; /* for week number determination */
     _mcssr.mgfid = -1; /* invalid value */
@@ -731,50 +737,52 @@ extern void init_mcssr(gtime_t gt)
     _mcssr.frame =  0; /* initial value */
 }
 
-/* input QZSS L6 message from file -------------------------------------------
-* fetch next QZSS L6 message and input a messsage from file
-* args   : rtcm_t *rtcm IO   rtcm control struct
-*          FILE  *fp    I    file pointer
-* return : status (-2: end of file, -1: error message, 0: no message,
+/* stack QZSS L6E message ----------------------------------------------------
+* stack QZSS L6E message and synchronize frame with L6 preamble
+* args   : rtcm_t  *rtcm IO  rtcm control struct
+*          uint8_t  data I   L6E 1byte data
+* return : status (-1: error message, 0: no message,
 *                  10: input CSSR messages)
 * note   : before calling the function, init_mcssr()
 *-----------------------------------------------------------------------------*/
-extern int input_qzssl6(rtcm_t *rtcm, uint8_t data)
+extern int input_qzssl6e(rtcm_t *rtcm, const uint8_t data)
 {
-    trace(5,"input_qzssl6: data=%02x\n",data);
+    trace(5,"input_qzssl6e: data=%02x,%d\n",data,rtcm->nbyte);
     
-    rtcm->buff[rtcm->nbyte++]=data;
-
     /* synchronize frame with L6 preamble */
-    if(rtcm->nbyte==4) {
-        if((rtcm->buff[0]!=0x1A)||(rtcm->buff[1]!=0xCF)||
-           (rtcm->buff[2]!=0xFC)||(rtcm->buff[3]!=0x1D)) {
-            rtcm->nbyte=0;
+    if       ((rtcm->nbyte == 0) && (data != 0x1A)) return 0;
+    else if (((rtcm->nbyte == 1) && (data != 0xCF)) ||
+             ((rtcm->nbyte == 2) && (data != 0xFC)) ||
+             ((rtcm->nbyte == 3) && (data != 0x1D))) {
+        rtcm->nbyte=0;
+        if (data != 0x1A) {
             return 0;
         }
     }
+    rtcm->buff[rtcm->nbyte++]=data;
+
     if (rtcm->nbyte<L6BYTELEN) return 0;
 
     rtcm->nbyte=0;
-    return decode_qzss_l6msg(rtcm);
+    return decode_qzss_l6emsg(rtcm);
 }
 
-/* input QZSS L6 message from file -------------------------------------------
-* fetch next QZSS L6 message and input a messsage from file
-* args   : rtcm_t *rtcm IO   rtcm control struct
-*          FILE  *fp    I    file pointer
-* return : status (-2: end of file, -1...10: same as input_qzssl6())
-* note   : same as input_qzssl6()
+/* input QZSS L6E message from file ------------------------------------------
+* fetch next QZSS L6E message and input a messsage from file
+* args   : rtcm_t  *rtcm IO  rtcm control struct
+*          FILE    *fp   I   file pointer
+* return : status (-2: end of file, -1...10: same as input_qzssl6e())
+* note   : same as input_qzssl6e()
 *-----------------------------------------------------------------------------*/
-extern int input_qzssl6f(rtcm_t *rtcm, FILE *fp)
+extern int input_qzssl6ef(rtcm_t *rtcm, FILE *fp)
 {
     int i,data,ret;
     
-    trace(4,"input_qzssl6f\n");
+    trace(4,"input_qzssl6ef\n");
     
-    for (i=0;i<4096;i++) {
-        if ((data=fgetc(fp))==EOF) return -2;
-        if ((ret=input_qzssl6(rtcm,(uint8_t)data))) return ret;
+    for (i = 0; i < 4096; i++) {
+        if ((data=fgetc(fp)) == EOF) return -2;
+        if ((ret=input_qzssl6e(rtcm,(uint8_t)data))) return ret;
     }
     return 0; /* return at every 4k bytes */
 }
@@ -786,7 +794,7 @@ extern int input_qzssl6f(rtcm_t *rtcm, FILE *fp)
 * return : MADOCA-PPP CB,PB code
 * note   : ref [1] section 5.5.3.1 Applicable Signals of Code/Phase Bias
 *-----------------------------------------------------------------------------*/
-extern int mcssr_sel_biascode(int sys, int code)
+extern int mcssr_sel_biascode(const int sys, const int code)
 {
     switch (sys) {
         case SYS_GPS:

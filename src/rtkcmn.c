@@ -144,6 +144,9 @@
 *                           use integer types in stdint.h
 *                           surppress warnings
 *           2023/02/01 1.46 branch from ver.2.4.3b34 for MADOCALIB
+*           2024/01/10 1.47 support MADOCA-PPP ionospheric corrections
+*                           add pos2-ionocorr, pos2-arsys, stats-prnbsys in prcopt
+*           2024/06/06 1.48 delete stats-prnbsys.
 *-----------------------------------------------------------------------------*/
 #define _POSIX_C_SOURCE 199506
 #include <stdarg.h>
@@ -207,14 +210,16 @@ const prcopt_t prcopt_default={ /* defaults processing options */
     PMODE_SINGLE,0,2,SYS_GPS,   /* mode,soltype,nf,navsys */
     15.0*D2R,{{0,0}},           /* elmin,snrmask */
     0,1,1,1,                    /* sateph,modear,glomodear,bdsmodear */
+    SYS_GPS,0,                  /* arsys,ionocorr */
     5,0,10,1,                   /* maxout,minlock,minfix,armaxiter */
     0,0,0,0,                    /* estion,esttrop,dynamics,tidecorr */
     1,0,0,0,0,                  /* niter,codesmooth,intpref,sbascorr,sbassatsel */
     0,0,                        /* rovpos,refpos */
     {100.0,100.0},              /* eratio[] */
+    1.0,                        /* ura ratio */
     {100.0,0.003,0.003,0.0,1.0}, /* err[] */
     {30.0,0.03,0.3},            /* std[] */
-    {1E-4,1E-3,1E-4,1E-1,1E-2,0.0}, /* prn[] */
+    {1E-4,1E-3,1E-4,1E-1,1E-2,0.0,1E-2}, /* prn[] */
     5E-12,                      /* sclkstab */
     {3.0,0.9999,0.25,0.1,0.05}, /* thresar */
     0.0,0.0,0.05,               /* elmaskar,almaskhold,thresslip */

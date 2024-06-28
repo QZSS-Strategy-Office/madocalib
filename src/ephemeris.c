@@ -1,6 +1,7 @@
 /*------------------------------------------------------------------------------
 * ephemeris.c : satellite ephemeris and clock functions
 *
+*          Copyright (C) 2024 Cabinet Office, Japan, All rights reserved.
 *          Copyright (C) 2010-2020 by T.TAKASU, All rights reserved.
 *
 * references :
@@ -25,6 +26,7 @@
 *         Navigation office, February, 2019
 *     [10] RTCM Standard 10403.3, Differential GNSS (Global Navigation
 *         Satellite Systems) Services - version 3, October 7, 2016
+*     [11] CAO IS-QZSS-MDC-002, November, 2023
 *
 * version : $Revision:$ $Date:$
 * history : 2010/07/28 1.1  moved from rtkcmn.c
@@ -70,6 +72,8 @@
 *                           fix bug on clock reference time in satpos_ssr()
 *                           fix bug on wrong value with ura=15 in var_ura()
 *                           use integer types in stdint.h
+*           2024/01/10 1.15 branch from ver.2.4.3b34 for MADOCALIB
+*                           change constant MAXAGESSR 90.0 -> 60.0
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -98,7 +102,7 @@
 #define DEFURASSR 0.15            /* default accurary of ssr corr (m) */
 #define MAXECORSSR 10.0           /* max orbit correction of ssr (m) */
 #define MAXCCORSSR (1E-6*CLIGHT)  /* max clock correction of ssr (m) */
-#define MAXAGESSR 90.0            /* max age of ssr orbit and clock (s) */
+#define MAXAGESSR 60.0            /* max age of ssr orbit and clock (s) ref [11] */
 #define MAXAGESSR_HRCLK 10.0      /* max age of ssr high-rate clock (s) */
 #define STD_BRDCCLK 30.0          /* error of broadcast clock (m) */
 #define STD_GAL_NAPA 500.0        /* error of galileo ephemeris for NAPA (m) */
