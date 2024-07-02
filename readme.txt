@@ -24,10 +24,10 @@ The MADOCALIB ver. 1.2b is distributed under the following BSD 2-clause license 
 Users are permitted to develop, produce or sell their own non-commercial or commercial 
 products utilizing, linking or including MADOCALIB as long as they comply with the license.
 
-   Copyright (C) 2023 Cabinet Office, Japan, All rights reserved.
+   Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
    Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
-   Copyright (C) 2023 Japan Aerospace Exploration Agency. All Rights Reserved.
-   Copyright (C) 2023 TOSHIBA ELECTRONIC TECHNOLOGIES CORPORATION. All Rights Reserved.
+   Copyright (C) 2023-2024 Japan Aerospace Exploration Agency. All Rights Reserved.
+   Copyright (C) 2023-2024 TOSHIBA ELECTRONIC TECHNOLOGIES CORPORATION. All Rights Reserved.
    Copyright (c) 2007-2020, T. Takasu, All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
