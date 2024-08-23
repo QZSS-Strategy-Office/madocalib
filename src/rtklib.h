@@ -2,6 +2,7 @@
 * rtklib.h : RTKLIB constants, types and function prototypes
 *
 *          Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2007-2020 by T.TAKASU, All rights reserved.
 *
 * options : -DENAGLO   enable GLONASS
@@ -32,6 +33,7 @@
 *           2024/01/10 1.13 support MADOCA-PPP ionospheric corrections
 *           2024/03/15 1.14 add VER_MADOCALIB
 *           2024/06/17 1.15 VER_MADOCALIB 1.2
+*           2024/07/23 1.16 VER_MADOCALIB 1.3
 *-----------------------------------------------------------------------------*/
 #ifndef RTKLIB_H
 #define RTKLIB_H
@@ -63,7 +65,7 @@ extern "C" {
 /* constants -----------------------------------------------------------------*/
 
 #define VER_RTKLIB  "2.4.3"             /* library version */
-#define VER_MADOCALIB "1.2"
+#define VER_MADOCALIB "1.3"
 
 #define PATCH_LEVEL "b34"               /* patch level */
 
@@ -792,6 +794,9 @@ typedef struct {        /* SSR correction type */
     float  cbias[MAXCODE]; /* code biases (m) */
     double pbias[MAXCODE]; /* phase biases (m) */
     float  stdpb[MAXCODE]; /* std-dev of phase biases (m) */
+    int vcbias[MAXCODE];/* code biases valid flag(0:invlalid,1:valid) */
+    int vpbias[MAXCODE];/* phase biases valid flag(0:invlalid,1:valid) */
+    int discnt[MAXCODE];/* phase biases discontinuity counter */
     double yaw_ang,yaw_rate; /* yaw angle and yaw rate (deg,deg/s) */
     uint8_t update;     /* update flag (0:no update,1:update) */
 } ssr_t;
@@ -1178,6 +1183,7 @@ typedef struct {        /* satellite status type */
     double phw;         /* phase windup (cycle) */
     gtime_t pt[2][NFREQ]; /* previous carrier-phase time */
     double ph[2][NFREQ]; /* previous carrier-phase observable (cycle) */
+    int discont[NFREQ];  /* discontinuity counter of ssr phase bias */
 } ssat_t;
 
 typedef struct {        /* ambiguity control type */

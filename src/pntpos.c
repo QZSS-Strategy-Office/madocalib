@@ -2,6 +2,7 @@
 * pntpos.c : standard positioning
 *
 *          Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2007-2020 by T.TAKASU, All rights reserved.
 *
 * version : $Revision:$ $Date:$
@@ -26,6 +27,8 @@
 *                           add output of velocity estimation error in estvel()
 *           2023/01/06 1.8  branch from ver.2.4.3b34 for MADOCALIB
 *           2024/01/10 1.9  fix bug on ionosphere error variance in rescode()
+*           2024/08/20 1.10 change ionospheric option of single-point 
+*                           positioning for multi-frequency condition.
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -633,7 +636,8 @@ extern int pntpos(const obsd_t *obs, int n, const nav_t *nav,
     rs=mat(6,n); dts=mat(2,n); var=mat(1,n); azel_=zeros(2,n); resp=mat(1,n);
     
     if (opt_.mode!=PMODE_SINGLE) { /* for precise positioning */
-        opt_.ionoopt=IONOOPT_BRDC;
+        if (opt_.nf>1) opt_.ionoopt=IONOOPT_IFLC;
+        else           opt_.ionoopt=IONOOPT_BRDC;
         opt_.tropopt=TROPOPT_SAAS;
     }
     /* satellite positons, velocities and clocks */

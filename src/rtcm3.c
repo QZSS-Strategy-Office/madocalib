@@ -2,6 +2,7 @@
 * rtcm3.c : RTCM ver.3 message decorder functions
 *
 *          Copyright (C) 2023 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2009-2020 by T.TAKASU, All rights reserved.
 *
 * references :
@@ -49,6 +50,11 @@
 *                           use API code2freq() to get carrier frequency
 *                           use integer types in stdint.h
 *           2023/02/01 1.23 branch from ver.2.4.3b34 for MADOCALIB
+*           2024/07/23 1.24 update SSR signal and tracking mode IDs.
+*                           delete -RTCM_DRAFT option.
+*                           support phase discontinuity counter for SSR 7.
+*                           add process to output data with zero phase bias 
+*                           value in rtcm3e.c
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -136,17 +142,17 @@ const uint8_t ssr_sig_glo[32]={
 };
 const uint8_t ssr_sig_gal[32]={
     CODE_L1A,CODE_L1B,CODE_L1C,CODE_L1X,       0,CODE_L5I,CODE_L5Q,CODE_L5X,
-    CODE_L7I,CODE_L7Q,       0,CODE_L8I,CODE_L8Q,       0,CODE_L6A,CODE_L6B,
+    CODE_L7I,CODE_L7Q,CODE_L7X,CODE_L8I,CODE_L8Q,       0,CODE_L6A,CODE_L6B,
     CODE_L6C
 };
 const uint8_t ssr_sig_qzs[32]={
-    CODE_L1C,CODE_L1S,CODE_L1L,CODE_L2S,CODE_L2L,       0,CODE_L5I,CODE_L5Q,
-           0,CODE_L6S,CODE_L6L,       0,       0,       0,       0,       0,
+    CODE_L1C,CODE_L1S,CODE_L1L,CODE_L2S,CODE_L2L,CODE_L2X,CODE_L5I,CODE_L5Q,
+    CODE_L5X,CODE_L6S,CODE_L6L,       0,CODE_L1X,       0,       0,       0,
            0,CODE_L6E
 };
 const uint8_t ssr_sig_cmp[32]={
-    CODE_L2I,CODE_L2Q,       0,CODE_L6I,CODE_L6Q,       0,CODE_L7I,CODE_L7Q,
-           0,CODE_L1D,CODE_L1P,       0,CODE_L5D,CODE_L5P,       0,CODE_L1A,
+    CODE_L2I,CODE_L2Q,CODE_L2X,CODE_L6I,CODE_L6Q,CODE_L6X,CODE_L7I,CODE_L7Q,
+    CODE_L7X,CODE_L1D,CODE_L1P,       0,CODE_L5D,CODE_L5P,       0,CODE_L1A,
            0,       0,CODE_L6A
 };
 const uint8_t ssr_sig_sbs[32]={
@@ -1465,7 +1471,7 @@ static int decode_ssr1_head(rtcm_t *rtcm, int sys, int subtype, int *sync,
     int i=24+12,nsat,udi,provid=0,solid=0,ns;
     
     if (subtype==0) { /* RTCM SSR */
-        ns=((sys==SYS_QZS)&&!strstr(rtcm->opt,"-RTCM_DRAFT"))?4:6;
+        ns=6;
         if (i+((sys==SYS_GLO)?53:50+ns)>rtcm->len*8) return -1;
     }
     else { /* IGS SSR */
@@ -1507,7 +1513,7 @@ static int decode_ssr2_head(rtcm_t *rtcm, int sys, int subtype, int *sync,
     int i=24+12,nsat,udi,provid=0,solid=0,ns;
     
     if (subtype==0) { /* RTCM SSR */
-        ns=((sys==SYS_QZS)&&!strstr(rtcm->opt,"-RTCM_DRAFT"))?4:6;
+        ns=6;
         if (i+((sys==SYS_GLO)?52:49+ns)>rtcm->len*8) return -1;
     }
     else {
@@ -1644,6 +1650,7 @@ static int decode_ssr3(rtcm_t *rtcm, int sys, int subtype)
     const uint8_t *sigs;
     double udint,bias,cbias[MAXCODE];
     int i,j,k,type,mode,sync,iod,nsat,prn,sat,nbias,np,offp;
+    int vcbias[MAXCODE]={0};
     
     type=getbitu(rtcm->buff,24,12);
     
@@ -1669,15 +1676,19 @@ static int decode_ssr3(rtcm_t *rtcm, int sys, int subtype)
         prn  =getbitu(rtcm->buff,i,np)+offp; i+=np;
         nbias=getbitu(rtcm->buff,i, 5);      i+= 5;
         
-        for (k=0;k<MAXCODE;k++) cbias[k]=0.0;
+        for (k=0;k<MAXCODE;k++) {
+            cbias[k]=0.0;
+            vcbias[k]=0;
+        }
         for (k=0;k<nbias&&i+19<=rtcm->len*8;k++) {
             mode=getbitu(rtcm->buff,i, 5);      i+= 5;
             bias=getbits(rtcm->buff,i,14)*0.01; i+=14;
             if (sigs[mode]) {
-                cbias[sigs[mode]-1]=(float)bias;
+                cbias [sigs[mode]-1]=(float)bias;
+                vcbias[sigs[mode]-1]=1; /* 1:output */
             }
             else {
-                trace(2,"rtcm3 %d not supported mode: mode=%d\n",type,mode);
+                trace(2,"rtcm3 %d not supported mode: sys=%d mode=%d\n",type,sys,mode);
             }
         }
         if (!(sat=satno(sys,prn))) {
@@ -1689,7 +1700,8 @@ static int decode_ssr3(rtcm_t *rtcm, int sys, int subtype)
         rtcm->ssr[sat-1].iod[4]=iod;
         
         for (k=0;k<MAXCODE;k++) {
-            rtcm->ssr[sat-1].cbias[k]=(float)cbias[k];
+            rtcm->ssr[sat-1].cbias [k]=(float)cbias[k];
+            rtcm->ssr[sat-1].vcbias[k]=vcbias[k]; /* 1:output */
         }
         rtcm->ssr[sat-1].update=1;
     }
@@ -1849,7 +1861,7 @@ static int decode_ssr7_head(rtcm_t *rtcm, int sys, int subtype, int *sync,
     int i=24+12,nsat,udi,provid=0,solid=0,ns;
     
     if (subtype==0) { /* RTCM SSR */
-        ns=((sys==SYS_QZS)&&!strstr(rtcm->opt,"-RTCM_DRAFT"))?4:6;
+        ns=6;
         if (i+((sys==SYS_GLO)?54:51+ns)>rtcm->len*8) return -1;
     }
     else { /* IGS SSR */
@@ -1883,9 +1895,10 @@ static int decode_ssr7_head(rtcm_t *rtcm, int sys, int subtype, int *sync,
 static int decode_ssr7(rtcm_t *rtcm, int sys, int subtype)
 {
     const uint8_t *sigs;
-    double udint,bias,std=0.0,pbias[MAXCODE],stdpb[MAXCODE];
+    double udint,bias,pbias[MAXCODE];
     int i,j,k,type,mode,sync,iod,nsat,prn,sat,nbias,np,mw,offp,sii,swl;
     int dispe,sdc,yaw_ang,yaw_rate;
+    int vpbias[MAXCODE]={0},discnt[MAXCODE]={0};
     
     type=getbitu(rtcm->buff,24,12);
     
@@ -1913,20 +1926,20 @@ static int decode_ssr7(rtcm_t *rtcm, int sys, int subtype)
         yaw_ang =getbitu(rtcm->buff,i, 9);      i+= 9;
         yaw_rate=getbits(rtcm->buff,i, 8);      i+= 8;
         
-        for (k=0;k<MAXCODE;k++) pbias[k]=stdpb[k]=0.0;
-        for (k=0;k<nbias&&i+((subtype==0)?49:32)<=rtcm->len*8;k++) {
+        for (k=0;k<MAXCODE;k++) {
+            pbias[k]=0.0;
+            discnt[k]=vpbias[k]=0;
+        }
+        for (k=0;k<nbias&&(i+32)<=rtcm->len*8;k++) {
             mode=getbitu(rtcm->buff,i, 5); i+= 5;
             sii =getbitu(rtcm->buff,i, 1); i+= 1; /* integer-indicator */
             swl =getbitu(rtcm->buff,i, 2); i+= 2; /* WL integer-indicator */
             sdc =getbitu(rtcm->buff,i, 4); i+= 4; /* discontinuity counter */
             bias=getbits(rtcm->buff,i,20); i+=20; /* phase bias (m) */
-            if ((subtype==0)&&!strstr(rtcm->opt,"-RTCM_DRAFT")) {
-                std=getbitu(rtcm->buff,i,17); i+=17; /* phase bias std-dev (m) */
-            }
             if (sigs[mode]) {
-                if(strstr(rtcm->opt,"-RTCM_DRAFT"))bias*=-1;
-                pbias[sigs[mode]-1]=bias*0.0001; /* (m) */
-                stdpb[sigs[mode]-1]=std *0.0001; /* (m) */
+                pbias [sigs[mode]-1]=bias*0.0001; /* (m) */
+                discnt[sigs[mode]-1]=sdc;
+                vpbias[sigs[mode]-1]=1; /* 1:output */
             }
             else {
                 trace(2,"rtcm3 %d not supported mode: mode=%d\n",type,mode);
@@ -1943,8 +1956,10 @@ static int decode_ssr7(rtcm_t *rtcm, int sys, int subtype)
         rtcm->ssr[sat-1].yaw_rate=yaw_rate/8192.0*180.0; /* (deg/s) */
         
         for (k=0;k<MAXCODE;k++) {
-            rtcm->ssr[sat-1].pbias[k]=pbias[k];
-            rtcm->ssr[sat-1].stdpb[k]=(float)stdpb[k];
+            rtcm->ssr[sat-1].pbias [k]=pbias[k];
+            rtcm->ssr[sat-1].stdpb [k]=0.0;
+            rtcm->ssr[sat-1].vpbias[k]=vpbias[k]; /* 1:output */
+            rtcm->ssr[sat-1].discnt[k]=discnt[k];
         }
     }
     return 20;
@@ -2695,10 +2710,7 @@ extern int decode_rtcm3(rtcm_t *rtcm)
         case 1266: ret=decode_ssr7(rtcm,SYS_GLO,0); break; /* draft */
         case 1267: ret=decode_ssr7(rtcm,SYS_GAL,0); break; /* draft */
         case 1268: ret=decode_ssr7(rtcm,SYS_QZS,0); break; /* draft */
-        case   11: ret=decode_ssr7(rtcm,SYS_GPS,0); break; /* tentative */
-        case   12: ret=decode_ssr7(rtcm,SYS_GAL,0); break; /* tentative */
-        case   13: ret=decode_ssr7(rtcm,SYS_QZS,0); break; /* tentative */
-        case   14: ret=decode_ssr7(rtcm,SYS_CMP,0); break; /* tentative */
+        case 1270: ret=decode_ssr7(rtcm,SYS_CMP,0); break; /* draft */
         case 4073: ret=decode_type4073(rtcm); break;
         case 4076: ret=decode_type4076(rtcm); break;
     }

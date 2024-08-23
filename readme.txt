@@ -61,7 +61,15 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 * 2024/03/11 license updated
 * 2024/03/31 1.1b - not open to the public
 * 2024/07/01 1.2  - The second public version.
-                    Support MADOCA-PPP ionospheric corrections.
+                      Support MADOCA-PPP ionospheric corrections.
+* 2024/08/23 1.3  - The third public version.
+                      Add application of cssr2ssr (convert cssr message file to 
+                      ssr message file).
+                      Support ambiguity re-initialization by Compact SSR phase 
+                      discontinuity indicator.
+                      Apply phase bias correction only when performing 
+                      ambiguity resolution.
+                      Other performance improvements.
 
 #NOTES
 

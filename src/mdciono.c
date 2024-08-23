@@ -10,6 +10,7 @@
 * history : 2024/01/10 1.0  new, for MADOCALIB from TETC original tools.
 *           2024/02/10 1.1  fix bug on when the last byte of R-S is the same as
 *                           the first byte of the preamble in input_qzssl6d()
+*           2024/07/23 1.2  delete unnecessary constant.
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -24,8 +25,6 @@
 
 #define MIONO_MT_COV                1   /* STEC Coverage Message Type */
 #define MIONO_MT_COR                2   /* STEC Correction Message Type */
-                                    
-#define MIONO_VALID_COR           300   /* Validity Period[s] (Table 6.3.2-3) */
 
 #define MIONO_MAX_SYS               5   /* GNSS ID (Table 6.3.2-8) */
 #define MIONO_SYS_GPS               0
@@ -39,7 +38,7 @@
 #define MIONO_INVALID_10BIT      -512
 #define MIONO_INVALID_8BIT       -128
 
-#define MIONO_MAX_PRN               3   /* Max defined MADOCA-PPP L6D signal (Table 3-1) */
+#define MIONO_MAX_PRN               2   /* Max defined MADOCA-PPP L6D signal (Table 3-1) */
 
 #define MIONO_URA_UNDEF           0.0   /* Note, If undefined, worst case value is assumed. */
 

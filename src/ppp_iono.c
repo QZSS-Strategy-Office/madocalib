@@ -2,6 +2,7 @@
 * ppp_iono.c : ppp ionospheric correction functions
 *
 *          Copyright (C) 2024 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *
 * references :
 *     [1]  CAO IS-QZSS-MDC-002, November, 2023

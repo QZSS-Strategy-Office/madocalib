@@ -2,6 +2,7 @@
 * ppp.c : precise point positioning
 *
 *          Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2010-2020 by T.TAKASU, All rights reserved.
 *
 * options : -DIERS_MODEL  use IERS tide model
@@ -77,6 +78,12 @@
 *                           delete udbsys_ppp().
 *           2024/06/06 1.20 coonsider URA ratio in the calculation of the 
 *                           variance of phase and code residuals.
+*           2024/07/23 1.21 support cycle slip detection by ssr phase bias 
+*                           discontinuity indicator.
+*                           apply phase bias correction only when performing 
+*                           ambiguity resolution.
+*                           change the sign of the phase bias correction to 
+*                           correspond to IS-QZSS-MDC (ref.[12]).
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -395,7 +402,7 @@ static void corr_meas(const obsd_t *obs, const nav_t *nav, const double *azel,
                       double *Lc, double *Pc)
 {
     char satid[8],*tstr=time_str(obs->time, 3);
-    double freq[2]={0},C1,C2,cb,pb;
+    double freq[2]={0},C1,C2,cb=0.0,pb=0.0;
     int i,sys=satsys(obs->sat,NULL),ssrcode=CODE_NONE;
 
     satno2id(obs->sat, satid);
@@ -426,12 +433,9 @@ static void corr_meas(const obsd_t *obs, const nav_t *nav, const double *azel,
             trace(3,"corr_meas cbias %s %s obscode=%2d ssrcode=%2d cbias=%7.3f\n",
                 tstr,satid,obs->code[i],ssrcode,cb);
         }
-        if(pb!=0.0) {
-            /* Note, In ref [12] section 5.5.3.3,
-               it is also additive in code bias,
-               but for compatibility with conventional processing,
-               negative values are retained and subtracted. */
-            L[i]-=pb;
+        if((opt->modear>ARMODE_OFF) && (opt->arsys&sys) &&
+            pb!=0.0) {
+            L[i]+=pb;
             trace(3,"corr_meas pbias %s %s obscode=%2d ssrcode=%2d pbias=%7.3f\n",
                 tstr,satid,obs->code[i],ssrcode,pb);
         }
@@ -511,6 +515,43 @@ static void detslp_mw(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
             
             /* Note, Use constants to align concept with detslp_ll() */
             for (j=0;j<PPP_NFREQ;j++) rtk->ssat[obs[i].sat-1].slip[j]|=1;
+        }
+    }
+}
+/* detect cycle slip by ssr phase bias discontinuity indicator ---------------*/
+static void detslp_ssr(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
+{
+    int discont0,discont1,ssrcode;
+    int sys,i,j;
+    
+    trace(3,"detslp_ssr: n=%d\n",n);
+    
+    if (rtk->opt.sateph!=EPHOPT_SSRAPC && rtk->opt.sateph!=EPHOPT_SSRCOM) {
+        return;
+    }
+    if (rtk->opt.modear==ARMODE_OFF) return;
+    
+    for (i=0;i<n&&i<MAXOBS;i++) {
+        if (!nav->ssr[obs[i].sat-1].t0[5].time) continue;
+        
+        sys=satsys(obs[i].sat, NULL);
+        if (!(rtk->opt.arsys&sys)) continue;
+        
+        /* detect slip by discontinuity indicator */
+        for (j=0;j<rtk->opt.nf;j++) {
+            ssrcode = mcssr_sel_biascode(sys, obs[i].code[j]);
+            if (ssrcode == CODE_NONE) continue;
+            if (nav->ssr[obs[i].sat-1].pbias[ssrcode-1]==0.0) continue;
+            
+            discont0=rtk->ssat[obs[i].sat-1].discont[j];
+            discont1=nav->ssr[obs[i].sat-1].discnt[ssrcode-1];
+            rtk->ssat[obs[i].sat-1].discont[j]=discont1;
+            
+            if (discont0!=discont1) {
+                rtk->ssat[obs[i].sat-1].slip[j]|=1;
+                trace(3,"detslp_ssr: discont detected sys=%2d sat=%2d j=%d code=%2d discont0=%d discont1=%d\n",
+                    sys,obs[i].sat,j,ssrcode,discont0,discont1);
+            }
         }
     }
 }
@@ -704,6 +745,9 @@ static void udbias_ppp(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
     
     /* detect slip by Melbourne-Wubbena linear combination jump */
     detslp_mw(rtk,obs,n,nav);
+    
+    /* detect cycle slip by ssr */
+    detslp_ssr(rtk,obs,n,nav);
     
     ecef2pos(rtk->sol.rr,pos);
     
@@ -933,7 +977,7 @@ static int ppp_res(int post, const obsd_t *obs, int n, const double *rs,
                    double *azel)
 {
     prcopt_t *opt=&rtk->opt;
-    double y,r,cdtr,bias,C=0.0,rr[3],pos[3],e[3],dtdx[3],L[NFREQ],P[NFREQ],Lc,Pc;
+    double y,r,cdtr,bias,C=0.0,rr[3],pos[3],e[3],dtdx[3]={0.0},L[NFREQ],P[NFREQ],Lc,Pc;
     double var[MAXOBS*2],dtrp=0.0,dion=0.0,vart=0.0,vari=0.0,freq;
     double dantr[NFREQ]={0},dants[NFREQ]={0};
     double ve[MAXOBS*2*NFREQ]={0},vmax=0;

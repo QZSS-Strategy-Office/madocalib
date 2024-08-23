@@ -2,6 +2,7 @@
 * mdccssr.c : QZSS L6E signal MADOCA-PPP Compact SSR message decode functions
 *
 * Copyright (C) 2023-2024 TOSHIBA ELECTRONIC TECHNOLOGIES CORPORATION. All Rights Reserved.
+* Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *
 * references :
 *     [1]  CAO IS-QZSS-MDC-002, November, 2023
@@ -20,6 +21,12 @@
 *                               input_qzssl6f()     -> input_qzssl6ef()
 *           2024/02/10 1.2  fix bug on when the last byte of R-S is the same as
 *                           the first byte of the preamble in input_qzssl6e()
+*           2024/07/23 1.3  update Compact SSR signal mask.
+*                           add process to output data with zero phase bias 
+*                           value in rtcm3e.c
+*                           support phase discontinuity indicator for subtype 5.
+*                           change the sign of the phase bias correction to 
+*                           correspond to IS-QZSS-MDC (ref.[1]).
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -85,7 +92,7 @@ const uint8_t cssr_sig_glo[16]={
 };
 const uint8_t cssr_sig_gal[16]={
     CODE_L1B,CODE_L1C,CODE_L1X,CODE_L5I,CODE_L5Q,CODE_L5X,CODE_L7I,CODE_L7Q,
-    CODE_L7X,CODE_L8I,CODE_L8Q,CODE_L8X,       0,       0,       0,       0
+    CODE_L7X,CODE_L8I,CODE_L8Q,CODE_L8X,CODE_L6A,CODE_L6B,       0,       0
 };
 const uint8_t cssr_sig_cmp[16]={
     CODE_L2I,CODE_L2Q,CODE_L2X,CODE_L6I,CODE_L6Q,CODE_L6X,CODE_L7I,CODE_L7Q,
@@ -93,7 +100,7 @@ const uint8_t cssr_sig_cmp[16]={
 };
 const uint8_t cssr_sig_qzs[16]={
     CODE_L1C,CODE_L1S,CODE_L1L,CODE_L1X,CODE_L2S,CODE_L2L,CODE_L2X,CODE_L5I,
-    CODE_L5Q,CODE_L5X,       0,       0,       0,       0,       0,       0
+    CODE_L5Q,CODE_L5X,CODE_L6I,CODE_L6Q,CODE_L6X,CODE_L1A,       0,       0
 };
 
 /* MADOCA-PPP Sub Type Transmission Pattern (Figure 4.2.2-1) -----------------*/
@@ -398,6 +405,7 @@ static int decode_mcssr_cc(mcssr_t *mc, ssr_t *ssr, int i, int apply)
 static int decode_mcssr_cb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
 {
     int j, k, sync, iod, ep, sat, nsig, mask, cb, flg;
+    int vcbias[MAXCODE]={0};
     double udint,cbias[MAXCODE];
     char satid[8];
 
@@ -417,7 +425,10 @@ static int decode_mcssr_cb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
         }
     }
     for (j = 0; j < mc->ns; j++) {
-        for (k = 0; k < MAXCODE; k++) cbias[k]=0.0;
+        for (k = 0; k < MAXCODE; k++) {
+            cbias[k]=0.0;
+            vcbias[k]=0;
+        }
         sat = mc->satlist[j];
         satno2id(sat, satid);
         nsig = mc->nsig[mc->gidlist[j]];
@@ -431,7 +442,8 @@ static int decode_mcssr_cb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
                 if(sat == 0) continue; /* unsupprted sat */
                 if(cb == MCSSR_INVALID_11BIT) continue; /* invalid value */
 
-                cbias[mc->siglist[mc->gidlist[j]][k]-1] = cb * 0.02;
+                cbias [mc->siglist[mc->gidlist[j]][k]-1] = cb * 0.02;
+                vcbias[mc->siglist[mc->gidlist[j]][k]-1] = 1; /* 1:output */
             }
             mask >>= 1;
         }
@@ -439,7 +451,10 @@ static int decode_mcssr_cb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
             ssr[sat-1].t0[4]   = mc->gt;
             ssr[sat-1].udi[4]  = udint;
             ssr[sat-1].iod[4]  = iod;
-            for (k = 0; k < MAXCODE; k++) ssr[sat-1].cbias[k]=(float)cbias[k];
+            for (k = 0; k < MAXCODE; k++) {
+                ssr[sat-1].cbias [k]=(float)cbias[k];
+                ssr[sat-1].vcbias[k]=vcbias[k];
+            }
             ssr[sat-1].update=1;
         }
     }
@@ -450,6 +465,7 @@ static int decode_mcssr_cb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
 static int decode_mcssr_pb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
 {
     int j, k, sync, iod, ep, sat, nsig, mask, pb, di, flg;
+    int discnt[MAXCODE]={0},vpbias[MAXCODE]={0};
     double udint,pbias[MAXCODE];
     char satid[8];
 
@@ -469,7 +485,10 @@ static int decode_mcssr_pb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
         }
     }
     for (j = 0; j < mc->ns; j++) {
-        for (k = 0;k<MAXCODE;k++) pbias[k]=0.0;
+        for (k = 0;k<MAXCODE;k++) {
+            pbias[k]=0.0;
+            discnt[k]=vpbias[k]=0;
+        }
         sat = mc->satlist[j];
         satno2id(sat, satid);
         nsig = mc->nsig[mc->gidlist[j]];
@@ -485,7 +504,9 @@ static int decode_mcssr_pb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
                 if(sat == 0) continue; /* unsupprted sat */
                 if(pb == MCSSR_INVALID_15BIT) continue; /* invalid value */
 
-                pbias[mc->siglist[mc->gidlist[j]][k]-1] = pb * 0.001;
+                pbias [mc->siglist[mc->gidlist[j]][k]-1] = pb * 0.001;
+                vpbias[mc->siglist[mc->gidlist[j]][k]-1] = 1; /* 1:output */
+                discnt[mc->siglist[mc->gidlist[j]][k]-1] = di;
             }
             mask >>= 1;
         }
@@ -495,8 +516,11 @@ static int decode_mcssr_pb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
             ssr[sat-1].iod[5]   = iod;
             ssr[sat-1].yaw_ang  = 0.0;
             ssr[sat-1].yaw_rate = 0.0;
-            /* Note. Invert the value based on the process in corr_phase_bias_ssr() */
-            for (k=0;k<MAXCODE;k++) ssr[sat-1].pbias[k] = -(float)pbias[k];
+            for (k=0;k<MAXCODE;k++) {
+                ssr[sat-1].pbias [k] = (float)pbias[k];
+                ssr[sat-1].vpbias[k] = vpbias[k];
+                ssr[sat-1].discnt[k] = discnt[k];
+            }
             ssr[sat-1].update=1;
         }
     }
