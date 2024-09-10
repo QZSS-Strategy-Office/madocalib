@@ -20,7 +20,7 @@ Please refere to the MADOCALIB manual for usage of MADOCALIB.
 
 # LICENSE
 
-The MADOCALIB ver. 1.2b is distributed under the following BSD 2-clause license (http://opensource.org/licenses/BSD-2-Clause) and additional exclusive clauses.
+The MADOCALIB is distributed under the following BSD 2-clause license (http://opensource.org/licenses/BSD-2-Clause) and additional exclusive clauses.
 Users are permitted to develop, produce or sell their own non-commercial or commercial 
 products utilizing, linking or including MADOCALIB as long as they comply with the license.
 

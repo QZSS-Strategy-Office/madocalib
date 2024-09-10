@@ -1,9 +1,10 @@
 # makefile for MADOCALIB cssr2ssr.exe
-# Rev.2024/01/10 by TETC
+# Rev.2024/09/03
 
 BINDIR  = ..\..\..\..\bin
 SRC     = ..\..\..\..\src
 
+CC      = gcc
 OPTS    = -DTRACE -DENAGLO -DENAQZS -DENAGAL -DENACMP -DENAIRN -DNFREQ=5 -DNEXOBS=5 -DWIN32
 CFLAGS  = -Wall -O3 -ansi -pedantic -Wno-unused-but-set-variable -I$(SRC) $(OPTS) -g
 LDLIBS  = -lwinmm
