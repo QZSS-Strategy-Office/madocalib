@@ -2,6 +2,7 @@
 * rtcm3e.c : rtcm ver.3 message encoder functions
 *
 *          Copyright (C) 2012-2020 by T.TAKASU, All rights reserved.
+*          Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *
 * references :
 *     see rtcm.c
@@ -43,6 +44,11 @@
 *                           use API code2idx() to get freq-index
 *                           use API code2freq() to get carrier frequency
 *                           use integer types in stdint.h
+*           2024/07/23 1.23 branch from ver.2.4.3b34 for MADOCALIB
+*           2024/07/23 1.24 change message type of SSR 7 phase bias.
+*                           support phase discontinuity counter for SSR 7.
+*                           output data with zero phase bias value.
+*                           update SSR signal and tracking mode IDs.
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -1390,14 +1396,14 @@ static int encode_ssr_head(int type, rtcm_t *rtcm, int sys, int subtype,
           "udint=%.0f\n",type,sys,subtype,nsat,sync,iod,udint);
     
     if (subtype==0) { /* RTCM SSR */
-        ns=(sys==SYS_QZS)?4:6;
+        ns=6;
         switch (sys) {
-            case SYS_GPS: msgno=(type==7)?11:1056+type; break;
-            case SYS_GLO: msgno=(type==7)? 0:1062+type; break;
-            case SYS_GAL: msgno=(type==7)?12:1239+type; break; /* draft */
-            case SYS_QZS: msgno=(type==7)?13:1245+type; break; /* draft */
-            case SYS_CMP: msgno=(type==7)?14:1257+type; break; /* draft */
-            case SYS_SBS: msgno=(type==7)? 0:1251+type; break; /* draft */
+            case SYS_GPS: msgno=(type==7)?1265:1056+type; break;
+            case SYS_GLO: msgno=(type==7)?1266:1062+type; break;
+            case SYS_GAL: msgno=(type==7)?1267:1239+type; break;
+            case SYS_QZS: msgno=(type==7)?1268:1245+type; break;
+            case SYS_CMP: msgno=(type==7)?1270:1257+type; break;
+            case SYS_SBS: msgno=(type==7)?   0:1251+type; break;
             default: return 0;
         }
         if (msgno==0) {
@@ -1449,25 +1455,26 @@ static int encode_ssr_head(int type, rtcm_t *rtcm, int sys, int subtype,
 /* SSR signal and tracking mode IDs ------------------------------------------*/
 static  const int codes_gps[32]={
     CODE_L1C,CODE_L1P,CODE_L1W,CODE_L1S,CODE_L1L,CODE_L2C,CODE_L2D,CODE_L2S,
-    CODE_L2L,CODE_L2X,CODE_L2P,CODE_L2W,       0,       0,CODE_L5I,CODE_L5Q
+    CODE_L2L,CODE_L2X,CODE_L2P,CODE_L2W,       0,       0,CODE_L5I,CODE_L5Q,
+    CODE_L5X,CODE_L1X
 };
 static const int codes_glo[32]={
     CODE_L1C,CODE_L1P,CODE_L2C,CODE_L2P,CODE_L4A,CODE_L4B,CODE_L6A,CODE_L6B,
     CODE_L3I,CODE_L3Q
 };
 static const int codes_gal[32]={
-    CODE_L1A,CODE_L1B,CODE_L1C,       0,       0,CODE_L5I,CODE_L5Q,       0,
-    CODE_L7I,CODE_L7Q,       0,CODE_L8I,CODE_L8Q,       0,CODE_L6A,CODE_L6B,
+    CODE_L1A,CODE_L1B,CODE_L1C,CODE_L1X,       0,CODE_L5I,CODE_L5Q,CODE_L5X,
+    CODE_L7I,CODE_L7Q,CODE_L7X,CODE_L8I,CODE_L8Q,       0,CODE_L6A,CODE_L6B,
     CODE_L6C
 };
 static const int codes_qzs[32]={
-    CODE_L1C,CODE_L1S,CODE_L1L,CODE_L2S,CODE_L2L,       0,CODE_L5I,CODE_L5Q,
-           0,CODE_L6S,CODE_L6L,       0,       0,       0,       0,       0,
+    CODE_L1C,CODE_L1S,CODE_L1L,CODE_L2S,CODE_L2L,CODE_L2X,CODE_L5I,CODE_L5Q,
+    CODE_L5X,CODE_L6S,CODE_L6L,       0,CODE_L1X,       0,       0,       0,
            0,CODE_L6E
 };
 static const int codes_bds[32]={
-    CODE_L2I,CODE_L2Q,       0,CODE_L6I,CODE_L6Q,       0,CODE_L7I,CODE_L7Q,
-           0,CODE_L1D,CODE_L1P,       0,CODE_L5D,CODE_L5P,       0,CODE_L1A,
+    CODE_L2I,CODE_L2Q,CODE_L2X,CODE_L6I,CODE_L6Q,CODE_L6X,CODE_L7I,CODE_L7Q,
+    CODE_L7X,CODE_L1D,CODE_L1P,       0,CODE_L5D,CODE_L5P,       0,CODE_L1A,
            0,       0,CODE_L6A
 };
 static const int codes_sbs[32]={
@@ -1620,7 +1627,7 @@ static int encode_ssr3(rtcm_t *rtcm, int sys, int subtype, int sync)
         if (satsys(j+1,&prn)!=sys||!rtcm->ssr[j].update) continue;
         
         for (k=nbias=0;k<32;k++) {
-            if (!codes[k]||rtcm->ssr[j].cbias[codes[k]-1]==0.0) continue;
+            if (!codes[k]||rtcm->ssr[j].vcbias[codes[k]-1]==0) continue;
             code[nbias]=k;
             bias[nbias++]=ROUND(rtcm->ssr[j].cbias[codes[k]-1]/0.01);
         }
@@ -1796,6 +1803,7 @@ static int encode_ssr7(rtcm_t *rtcm, int sys, int subtype, int sync)
     double udint=0.0;
     int i,j,k,iod=0,nsat,prn,nbias,np,offp;
     int code[MAXCODE],pbias[MAXCODE],stdpb[MAXCODE],yaw_ang,yaw_rate;
+    int discnt[MAXCODE];
     
     trace(3,"encode_ssr7: sys=%d subtype=%d sync=%d\n",sys,subtype,sync);
     
@@ -1827,8 +1835,9 @@ static int encode_ssr7(rtcm_t *rtcm, int sys, int subtype, int sync)
         if (satsys(j+1,&prn)!=sys||!rtcm->ssr[j].update) continue;
         
         for (k=nbias=0;k<32;k++) {
-            if (!codes[k]||rtcm->ssr[j].pbias[codes[k]-1]==0.0) continue;
+            if (!codes[k]||rtcm->ssr[j].vpbias[codes[k]-1]==0) continue;
             code[nbias]=k;
+            discnt[nbias ]=rtcm->ssr[j].discnt[codes[k]-1];
             pbias[nbias  ]=ROUND(rtcm->ssr[j].pbias[codes[k]-1]/0.0001);
             stdpb[nbias++]=ROUND(rtcm->ssr[j].stdpb[codes[k]-1]/0.0001);
         }
@@ -1840,14 +1849,11 @@ static int encode_ssr7(rtcm_t *rtcm, int sys, int subtype, int sync)
         setbits(rtcm->buff,i, 8,yaw_rate); i+= 8; /* yaw rate */
         
         for (k=0;k<nbias;k++) {
-            setbitu(rtcm->buff,i, 5,code[k] ); i+= 5; /* signal indicator */
-            setbitu(rtcm->buff,i, 1,0       ); i+= 1; /* integer-indicator */
-            setbitu(rtcm->buff,i, 2,0       ); i+= 2; /* WL integer-indicator */
-            setbitu(rtcm->buff,i, 4,0       ); i+= 4; /* discont counter */
-            setbits(rtcm->buff,i,20,pbias[k]); i+=20; /* phase bias */
-            if (subtype==0) {
-                setbits(rtcm->buff,i,17,stdpb[k]); i+=17; /* std-dev ph-bias */
-            }
+            setbitu(rtcm->buff,i, 5,code[k]  ); i+= 5; /* signal indicator */
+            setbitu(rtcm->buff,i, 1,0        ); i+= 1; /* integer-indicator */
+            setbitu(rtcm->buff,i, 2,0        ); i+= 2; /* WL integer-indicator */
+            setbitu(rtcm->buff,i, 4,discnt[k]); i+= 4; /* discont counter */
+            setbits(rtcm->buff,i,20,pbias[k] ); i+=20; /* phase bias */
         }
     }
     rtcm->nbit=i;
@@ -2718,10 +2724,11 @@ extern int encode_rtcm3(rtcm_t *rtcm, int type, int subtype, int sync)
         case 1261: ret=encode_ssr4(rtcm,SYS_CMP,0,sync); break; /* draft */
         case 1262: ret=encode_ssr5(rtcm,SYS_CMP,0,sync); break; /* draft */
         case 1263: ret=encode_ssr6(rtcm,SYS_CMP,0,sync); break; /* draft */
-        case   11: ret=encode_ssr7(rtcm,SYS_GPS,0,sync); break; /* tentative */
-        case   12: ret=encode_ssr7(rtcm,SYS_GAL,0,sync); break; /* tentative */
-        case   13: ret=encode_ssr7(rtcm,SYS_QZS,0,sync); break; /* tentative */
-        case   14: ret=encode_ssr7(rtcm,SYS_CMP,0,sync); break; /* tentative */
+        case 1265: ret=encode_ssr7(rtcm,SYS_GPS,0,sync); break; /* draft */
+        case 1266: ret=encode_ssr7(rtcm,SYS_GLO,0,sync); break; /* draft */
+        case 1267: ret=encode_ssr7(rtcm,SYS_GAL,0,sync); break; /* draft */
+        case 1268: ret=encode_ssr7(rtcm,SYS_QZS,0,sync); break; /* draft */
+        case 1270: ret=encode_ssr7(rtcm,SYS_CMP,0,sync); break; /* draft */
         case 4073: ret=encode_type4073(rtcm,subtype,sync); break;
         case 4076: ret=encode_type4076(rtcm,subtype,sync); break;
     }

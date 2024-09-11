@@ -1,13 +1,14 @@
 /*------------------------------------------------------------------------------
 * ppp_ar.c : ppp ambiguity resolution
 *
+*          Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2023-2024 Japan Aerospace Exploration Agency. All Rights Reserved.
+*          Copyright (C) 2012-2015 by T.TAKASU, All rights reserved.
+*
 * reference :
 *    [1] H.Okumura, C-gengo niyoru saishin algorithm jiten (in Japanese),
 *        Software Technology, 1991
-*
-*          Copyright (C) 2023 Cabinet Office, Japan, All rights reserved.
-*          Copyright (C) 2023 Japan Aerospace Exploration Agency. All Rights Reserved.
-*          Copyright (C) 2012-2015 by T.TAKASU, All rights reserved.
+*    [2] CAO IS-QZSS-MDC-002, November, 2023
 *
 * version : $Revision:$ $Date:$
 * history : 2013/03/11  1.0  new
@@ -17,6 +18,10 @@
 *           2015/11/26  1.3  support option opt->pppopt=-TRACE_AR
 *           2023/02/01  1.4  branch from MALIB PP for MADOCALIB
 *           2023/03/08  1.5  change sys to GPS only
+*           2024/01/10  1.6  add references [2]
+*                            support MADOCA-PPP ionospheric corrections, add NM
+*                            delete L5-receiver-dcb estimation, ND
+*                            support option opt->arsys in gen_sat_sd()
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -39,19 +44,24 @@
 #define NP(opt)     ((opt)->dynamics?9:3)
 #define NC(opt)     (NSYS)
 #define NT(opt)     ((opt)->tropopt<TROPOPT_EST?0:((opt)->tropopt==TROPOPT_EST?1:3))
+#define NM(opt)     (4)
 #define NI(opt)     ((opt)->ionoopt==IONOOPT_EST?MAXSAT:0)
-#define ND(opt)     ((opt)->nf>=3?1:0)
-#define NR(opt)     (NP(opt)+NC(opt)+NT(opt)+NI(opt)+ND(opt))
+#define NR(opt)     (NP(opt)+NC(opt)+NT(opt)+NM(opt)+NI(opt))
 #define IB(s,f,opt) (NR(opt)+MAXSAT*(f)+(s)-1)
 
 /* generate satellite SD (single-difference) ---------------------------------*/
 static int gen_sat_sd(rtk_t *rtk, const obsd_t *obs, int n, const int *exc,
                       const double *azel, int f, int *sat1, int *sat2, int *frq)
 {
-    const int sys[]={SYS_GPS,0};
+    int sys[4],s=0;
     double elmask,el[MAXOBS];
     int i,j,k,m,ns=0,sat[MAXOBS];
-    
+
+    if(rtk->opt.arsys & SYS_GPS) sys[s++]=SYS_GPS;
+    if(rtk->opt.arsys & SYS_GAL) sys[s++]=SYS_GAL;
+    if(rtk->opt.arsys & SYS_QZS) sys[s++]=SYS_QZS;
+    sys[s]=0;
+
     elmask=MAX(rtk->opt.elmaskar,rtk->opt.elmin);
     
     for (i=0;sys[i];i++) { /* for each system */

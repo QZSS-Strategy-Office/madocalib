@@ -1,7 +1,7 @@
 /*------------------------------------------------------------------------------
 * rtkpos.c : precise positioning
 *
-*          Copyright (C) 2023 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
 *          Copyright (C) 2007-2020 by T.TAKASU, All rights reserved.
 *
 * version : $Revision: 1.1 $ $Date: 2008/07/17 21:48:06 $
@@ -48,6 +48,8 @@
 *                           delete GLONASS IFB correction in ddres()
 *                           use integer types in stdint.h
 *           2023/02/01 1.17 branch from ver.2.4.3b34 for MADOCALIB
+*           2024/01/10 1.18 support MADOCA-PPP ionospheric corrections
+*                           change rtkinit(), rtkpos()
 *-----------------------------------------------------------------------------*/
 #include <stdarg.h>
 #include "rtklib.h"
@@ -1682,6 +1684,8 @@ extern void rtkinit(rtk_t *rtk, const prcopt_t *opt)
     }
     for (i=0;i<MAXERRMSG;i++) rtk->errbuf[i]=0;
     rtk->opt=*opt;
+    for (i=0;i<2;i++) rtk->miono_info[i]=0;
+    for (i=0;i<6;i++) rtk->prev_qr[i]=0;
 }
 /* free rtk control ------------------------------------------------------------
 * free memory for rtk control struct
@@ -1735,7 +1739,7 @@ static void signal_sel_ppp(obsd_t *pppobs, const nav_t *nav, const prcopt_t *opt
         if      (0==strcmp(sattype,"BLOCK IIR-M")) sigtype=opt->pppsig[0]; /* 1:L1C/A-L2C */
         else if (0==strcmp(sattype,"BLOCK IIF"  )) sigtype=opt->pppsig[1]; /* 1:L1C/A-L2C, 2:L1C/A-L5 */
         else if (0==strcmp(sattype,"BLOCK IIIA" )) sigtype=opt->pppsig[2];
-        else if (0==strcmp(sattype,"QZSS"       )) sigtype=opt->pppsig[3]; /* 1:L1CA-L2C */
+        else if (0==strcmp(sattype,"QZSS"       )) sigtype=opt->pppsig[3]; /* 1:L1C/A-L2C */
         else if (0==strcmp(sattype,"QZSS-2G"    )) sigtype=opt->pppsig[3];
         else if (0==strcmp(sattype,"QZSS-2I"    )) sigtype=opt->pppsig[3];
         else if (0==strcmp(sattype,"QZSS-2A"    )) sigtype=opt->pppsig[3];
@@ -1743,11 +1747,11 @@ static void signal_sel_ppp(obsd_t *pppobs, const nav_t *nav, const prcopt_t *opt
         switch (sys) {
         case SYS_GPS:
             signal_replace(pppobs,0,'1',"C");
-            if       (sigtype==0){  /* L1CA-L2P */
+            if       (sigtype==0){  /* L1C/A-L2P */
                 signal_replace(pppobs,1,'2',"PYWCMND"); /* Note, codepries="PYWCMNDLXS" */
             } else if(sigtype==1){  /* L1C/A-L2C */
                 signal_replace(pppobs,1,'2',"LXS");
-            } else if(sigtype==2){  /* L1C-L5 */
+            } else if(sigtype==2){  /* L1C/A-L5 */
                 signal_replace(pppobs,1,'5',"QXI");
             }
             break;
@@ -1834,7 +1838,7 @@ static void signal_sel_ppp(obsd_t *pppobs, const nav_t *nav, const prcopt_t *opt
 * notes  : before calling function, base station position rtk->sol.rb[] should
 *          be properly set for relative mode except for moving-baseline
 *-----------------------------------------------------------------------------*/
-extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
+extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, nav_t *nav)
 {
     static obsd_t pppobs[MAXOBS];
     prcopt_t *opt=&rtk->opt;
@@ -1881,6 +1885,7 @@ extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, const nav_t *nav)
     if (opt->mode>=PMODE_PPP_KINEMA) {
         memcpy(pppobs,obs,sizeof(obsd_t)*nu);
         signal_sel_ppp(pppobs,nav,opt,nu);
+        miono_get_corr(rtk->sol.rr,nav);
         pppos(rtk,pppobs,nu,nav);
         outsolstat(rtk);
         return 1;

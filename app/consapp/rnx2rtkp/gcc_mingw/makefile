@@ -1,13 +1,14 @@
 # makefile for MADOCALIB rnx2rtkp.exe
-# Rev.2023/02/01 by TETC
+# Rev.2024/07/01
 
 BINDIR  = ..\..\..\..\bin
 SRC     = ..\..\..\..\src
 
+CC      = gcc
 OPTS    = -DTRACE -DENAGLO -DENAQZS -DENAGAL -DENACMP -DENAIRN -DNFREQ=5 -DNEXOBS=5 -DWIN32
 CFLAGS  = -Wall -O3 -ansi -pedantic -Wno-unused-but-set-variable -I$(SRC) $(OPTS) -g
 LDLIBS  = -lwinmm
-OBJS    = rnx2rtkp.o rtkcmn.o rinex.o rtkpos.o postpos.o solution.o lambda.o geoid.o sbas.o preceph.o pntpos.o ephemeris.o options.o ppp.o ppp_ar.o rtcm.o rtcm2.o rtcm3.o rtcm3e.o ionex.o tides.o mdccssr.o
+OBJS    = rnx2rtkp.o rtkcmn.o rinex.o rtkpos.o postpos.o solution.o lambda.o geoid.o sbas.o preceph.o pntpos.o ephemeris.o options.o ppp.o ppp_ar.o ppp_iono.o rtcm.o rtcm2.o rtcm3.o rtcm3e.o ionex.o tides.o mdccssr.o mdciono.o
 
 rnx2rtkp.exe : $(OBJS)
 	$(CC) -o rnx2rtkp.exe $(OBJS) $(LDLIBS) 
@@ -41,6 +42,8 @@ ppp.o      : $(SRC)/ppp.c
 	$(CC) -c $(CFLAGS) $(SRC)/ppp.c
 ppp_ar.o   : $(SRC)/ppp_ar.c
 	$(CC) -c $(CFLAGS) $(SRC)/ppp_ar.c
+ppp_iono.o : $(SRC)/ppp_iono.c
+	$(CC) -c $(CFLAGS) $(SRC)/ppp_iono.c
 rtcm.o     : $(SRC)/rtcm.c
 	$(CC) -c $(CFLAGS) $(SRC)/rtcm.c
 rtcm2.o    : $(SRC)/rtcm2.c
@@ -55,6 +58,8 @@ tides.o    : $(SRC)/tides.c
 	$(CC) -c $(CFLAGS) $(SRC)/tides.c
 mdccssr.o  : $(SRC)/mdccssr.c
 	$(CC) -c $(CFLAGS) $(SRC)/mdccssr.c
+mdciono.o  : $(SRC)/mdccssr.c
+	$(CC) -c $(CFLAGS) $(SRC)/mdciono.c
 rnx2rtkp.o : $(SRC)/rtklib.h
 rtkcmn.o   : $(SRC)/rtklib.h
 rinex.o    : $(SRC)/rtklib.h
@@ -70,6 +75,7 @@ ephemeris.o: $(SRC)/rtklib.h
 options.o  : $(SRC)/rtklib.h
 ppp.o      : $(SRC)/rtklib.h
 ppp_ar.o   : $(SRC)/rtklib.h
+ppp_iono.o : $(SRC)/rtklib.h
 rtcm.o     : $(SRC)/rtklib.h
 rtcm2.o    : $(SRC)/rtklib.h
 rtcm3.o    : $(SRC)/rtklib.h
@@ -77,6 +83,14 @@ rtcm3e.o   : $(SRC)/rtklib.h
 ionex.o    : $(SRC)/rtklib.h
 tides.o    : $(SRC)/rtklib.h
 mdccssr.o  : $(SRC)/rtklib.h
+mdciono.o  : $(SRC)/rtklib.h
 
 install :
 	copy rnx2rtkp.exe $(BINDIR)
+
+clean :
+	del *.o
+	del rnx2rtkp.exe
+
+
+

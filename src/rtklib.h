@@ -1,7 +1,8 @@
 /*------------------------------------------------------------------------------
 * rtklib.h : RTKLIB constants, types and function prototypes
 *
-*          Copyright (C) 2023 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2007-2020 by T.TAKASU, All rights reserved.
 *
 * options : -DENAGLO   enable GLONASS
@@ -29,6 +30,10 @@
 *           2013/03/28 1.10 rtklib ver.2.4.2
 *           2020/11/30 1.11 rtklib ver.2.4.3 b34
 *           2023/02/01 1.12 branch from ver.2.4.3b34 for MADOCALIB
+*           2024/01/10 1.13 support MADOCA-PPP ionospheric corrections
+*           2024/03/15 1.14 add VER_MADOCALIB
+*           2024/06/17 1.15 VER_MADOCALIB 1.2
+*           2024/07/23 1.16 VER_MADOCALIB 1.3
 *-----------------------------------------------------------------------------*/
 #ifndef RTKLIB_H
 #define RTKLIB_H
@@ -60,6 +65,7 @@ extern "C" {
 /* constants -----------------------------------------------------------------*/
 
 #define VER_RTKLIB  "2.4.3"             /* library version */
+#define VER_MADOCALIB "1.3"
 
 #define PATCH_LEVEL "b34"               /* patch level */
 
@@ -512,6 +518,11 @@ extern "C" {
 #define P2_50       8.881784197001252E-16 /* 2^-50 */
 #define P2_55       2.775557561562891E-17 /* 2^-55 */
 
+#define NSYS_MIONO         4            /* number of MADOCA-PPP iono. corr. support systems */
+#define MIONO_MAX_RID    256            /* max region id   (IS-QZSS-MDC-002 Table 6.3.2-4) */
+#define MIONO_MAX_ANUM    32            /* max area number                 (Table 6.3.2-4) */
+#define MIONO_MAX_AGE    300.0          /* max age of STEC corr.(s)        (Table 6.3.2-3) */
+
 #ifdef WIN32
 #define thread_t    HANDLE
 #define lock_t      CRITICAL_SECTION
@@ -783,9 +794,49 @@ typedef struct {        /* SSR correction type */
     float  cbias[MAXCODE]; /* code biases (m) */
     double pbias[MAXCODE]; /* phase biases (m) */
     float  stdpb[MAXCODE]; /* std-dev of phase biases (m) */
+    int vcbias[MAXCODE];/* code biases valid flag(0:invlalid,1:valid) */
+    int vpbias[MAXCODE];/* phase biases valid flag(0:invlalid,1:valid) */
+    int discnt[MAXCODE];/* phase biases discontinuity counter */
     double yaw_ang,yaw_rate; /* yaw angle and yaw rate (deg,deg/s) */
     uint8_t update;     /* update flag (0:no update,1:update) */
 } ssr_t;
+
+typedef struct {        /* MADOCA-PPP L6D iono. corr. STEC type */
+    gtime_t t0;         /* correction time */
+    int sqi;            /* SSR STEC quality indicator */
+    double coef[6];     /* STEC poly.coef.{C00,C01,C10,C11,C02,C20} */
+} miono_sat_t;
+
+typedef struct {        /* MADOCA-PPP L6D iono. corr. area type */
+    int avalid;         /* 0:invalid,1:valid */
+    int sid;            /* shape ID[rectangle, circle} */
+    int type;           /* STEC correction type */
+    double ref[2];      /* reference point{Lat., Lon.} */
+    double span[2];     /* rect.{Lat.,Lon.}, span{Effective range,N/A} */
+    miono_sat_t sat[MAXSAT]; /* satellite STEC polynomial coefficients */
+} miono_area_t;
+
+typedef struct {        /* MADOCA-PPP L6D iono. corr. region type */
+    int rvalid;         /* 0:invalid,1:valid */
+    int ralert;         /* region alert flag */
+    int narea;          /* No. of area */
+    miono_area_t area[MIONO_MAX_ANUM];/* area */
+} miono_region_t;
+
+typedef struct {        /* PPP ionospheric correction type */
+    gtime_t time;       /* update time (GPST) */
+    gtime_t t0[MAXSAT]; /* correction time */
+    double  dly[MAXSAT]; /* L1 slant delay(m) */
+    double  std[MAXSAT]; /* L1 slant delay std(m) */
+} pppiono_corr_t;
+
+typedef struct {        /* PPP ionospheric correction type */
+    pppiono_corr_t corr;/* ionospheric correction */
+    miono_region_t re[MIONO_MAX_RID]; /* MADOCA-PPP L6D region */
+    int rid;            /*  MADOCA-PPP L6D region id */
+    int anum;           /*  MADOCA-PPP L6D area number */
+    int valid;          /* PPP ionospheric correction flag (0:invalid,1:valid) */
+} pppiono_t;
 
 typedef struct {        /* navigation data type */
     int n,nmax;         /* number of broadcast ephemeris */
@@ -823,6 +874,7 @@ typedef struct {        /* navigation data type */
     sbsion_t sbsion[MAXBAND+1]; /* SBAS ionosphere corrections */
     dgps_t dgps[MAXSAT]; /* DGPS corrections */
     ssr_t ssr[MAXSAT];  /* SSR corrections */
+    pppiono_t pppiono;  /* PPP ionosphereric corrections */
 } nav_t;
 
 typedef struct {        /* station parameter type */
@@ -890,6 +942,15 @@ typedef struct {        /* solution status buffer type */
     int n,nmax;         /* number of solution/max number of buffer */
     solstat_t *data;    /* solution status data */
 } solstatbuf_t;
+
+typedef struct {        /* MADOCA-PPP L6D control struct type */
+    gtime_t time;       /* message time */
+    int nbyte;          /* number of bytes in message buffer */
+    uint8_t buff[256];  /* message buffer */
+    char opt[256];      /* MADOCA-PPP L6D dependent options */
+    int rid;            /* decorded region ID */
+    miono_region_t re;  /* decorded region data */
+} mdcl6d_t;
 
 typedef struct {        /* RTCM control struct type */
     int staid;          /* station id */
@@ -968,6 +1029,8 @@ typedef struct {        /* processing options type */
     int modear;         /* AR mode (0:off,1:continuous,2:instantaneous,3:fix and hold,4:ppp-ar) */
     int glomodear;      /* GLONASS AR mode (0:off,1:on,2:auto cal,3:ext cal) */
     int bdsmodear;      /* BeiDou AR mode (0:off,1:on) */
+    int arsys;          /* navigation system for PPP-AR */
+    int ionocorr;       /* MADOCA-PPP ionospheric correction (0:off,1:on) */
     int maxout;         /* obs outage count to reset bias */
     int minlock;        /* min lock count to fix ambiguity */
     int minfix;         /* min fix count to hold ambiguity */
@@ -986,12 +1049,13 @@ typedef struct {        /* processing options type */
                         /* (0:pos in prcopt,  1:average of single pos, */
                         /*  2:read from file, 3:rinex header, 4:rtcm pos) */
     double eratio[NFREQ]; /* code/phase error ratio */
+    double uraratio;    /* ratio for external URA */
     double err[5];      /* measurement error factor */
                         /* [0]:reserved */
                         /* [1-3]:error factor a/b/c of phase (m) */
                         /* [4]:doppler frequency (hz) */
     double std[3];      /* initial-state std [0]bias,[1]iono [2]trop */
-    double prn[6];      /* process-noise std [0]bias,[1]iono [2]trop [3]acch [4]accv [5] pos */
+    double prn[7];      /* process-noise std [0]bias,[1]iono [2]trop [3]acch [4]accv [5]pos */
     double sclkstab;    /* satellite clock stability (sec/sec) */
     double thresar[8];  /* AR validation threshold */
     double elmaskar;    /* elevation mask of AR for rising satellite (deg) */
@@ -1017,7 +1081,8 @@ typedef struct {        /* processing options type */
     int  freqopt;       /* disable L2-AR */
     char pppopt[256];   /* ppp option */
     char rtcmopt[256];  /* rtcm options */
-    int  pppsig[4];     /* signal selection [0]GPS IIR-M,*/
+    int  pppsig[4];     /* signal selection [0]GPS IIR-M,[1]GPS IIF,[2]GPS IIIA,[3]QZS-1/2 */
+    char *l6dpath;      /* MADOCA-PPP ionospheric correction L6D file path */
 } prcopt_t;
 
 typedef struct {        /* solution options type */
@@ -1118,6 +1183,7 @@ typedef struct {        /* satellite status type */
     double phw;         /* phase windup (cycle) */
     gtime_t pt[2][NFREQ]; /* previous carrier-phase time */
     double ph[2][NFREQ]; /* previous carrier-phase observable (cycle) */
+    int discont[NFREQ];  /* discontinuity counter of ssr phase bias */
 } ssat_t;
 
 typedef struct {        /* ambiguity control type */
@@ -1142,6 +1208,8 @@ typedef struct {        /* RTK control/result type */
     int neb;            /* bytes in error message buffer */
     char errbuf[MAXERRMSG]; /* error message buffer */
     prcopt_t opt;       /* processing options */
+    int miono_info[2];  /* MADOCA-PPP iono. corr. info. (0:region id, 1:area No.) */
+    double prev_qr[6];  /* user position variance/covariance(m^2) */
 } rtk_t;
 
 typedef struct {        /* receiver raw data control type */
@@ -1714,7 +1782,7 @@ EXPORT int pntpos(const obsd_t *obs, int n, const nav_t *nav,
 /* precise positioning -------------------------------------------------------*/
 EXPORT void rtkinit(rtk_t *rtk, const prcopt_t *opt);
 EXPORT void rtkfree(rtk_t *rtk);
-EXPORT int  rtkpos (rtk_t *rtk, const obsd_t *obs, int nobs, const nav_t *nav);
+EXPORT int  rtkpos (rtk_t *rtk, const obsd_t *obs, int nobs, nav_t *nav);
 EXPORT int  rtkopenstat(const char *file, int level);
 EXPORT void rtkclosestat(void);
 EXPORT int  rtkoutstat(rtk_t *rtk, char *buff);
@@ -1726,6 +1794,12 @@ EXPORT int pppoutstat(rtk_t *rtk, char *buff);
 
 EXPORT int ppp_ar(rtk_t *rtk, const obsd_t *obs, int n, int *exc,
                   const nav_t *nav, const double *azel, double *x, double *P);
+
+EXPORT int input_statcorr(pppiono_corr_t *corr, FILE *fp);
+EXPORT int const_iono_corr(rtk_t *rtk, const obsd_t *obs, const nav_t *nav,
+                           const int n, const double *azel, const int *exc,
+                           const double *rr, const double *x, double *v,
+                           double *H, double *var);
 
 /* post-processing positioning -----------------------------------------------*/
 EXPORT int postpos(gtime_t ts, gtime_t te, double ti, double tu,
@@ -1780,17 +1854,23 @@ EXPORT void dl_test(gtime_t ts, gtime_t te, double ti, const url_t *urls,
 EXPORT int gis_read(const char *file, gis_t *gis, int layer);
 EXPORT void gis_free(gis_t *gis);
 
+/* MADOCA-PPP functions ------------------------------------------------------*/
+EXPORT void init_mcssr(const gtime_t gt);
+EXPORT int decode_qzss_l6emsg(rtcm_t *rtcm);
+EXPORT int input_qzssl6e(rtcm_t *rtcm, const uint8_t data);
+EXPORT int input_qzssl6ef(rtcm_t *rtcm, FILE *fp);
+EXPORT int mcssr_sel_biascode(const int sys, const int code);
+
+EXPORT void init_miono(const gtime_t gt);
+EXPORT int decode_qzss_l6dmsg(mdcl6d_t *mdcl6d);
+EXPORT int input_qzssl6d(mdcl6d_t *mdcl6d, const uint8_t data);
+EXPORT int input_qzssl6df(mdcl6d_t *mdcl6d, FILE *fp);
+EXPORT int miono_get_corr(const double *rr, nav_t *nav);
+
 /* application defined functions ---------------------------------------------*/
 extern int showmsg(const char *format,...);
 extern void settspan(gtime_t ts, gtime_t te);
 extern void settime(gtime_t time);
-
-/* MADOCA-PPP functions ------------------------------------------------------*/
-extern void init_mcssr(gtime_t gt);
-extern int decode_qzss_l6msg(rtcm_t *rtcm);
-extern int input_qzssl6(rtcm_t *rtcm, uint8_t data);
-extern int input_qzssl6f(rtcm_t *rtcm, FILE *fp);
-extern int mcssr_sel_biascode(int sys, int code);
 
 #ifdef __cplusplus
 }

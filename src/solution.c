@@ -1,7 +1,7 @@
 /*------------------------------------------------------------------------------
 * solution.c : solution functions
 *
-*          Copyright (C) 2023 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
 *          Copyright (C) 2007-2020 by T.TAKASU, All rights reserved.
 *
 * references :
@@ -55,6 +55,8 @@
 *                            use integer types in stdint.h
 *                            suppress warnings
 *           2023/01/06  1.19 branch from ver.2.4.3b34 for MADOCALIB
+*           2024/01/10  1.20 add arsys to solution
+*           2024/03/15  1.21 delete amb glo from solution
 *-----------------------------------------------------------------------------*/
 #include <ctype.h>
 #include "rtklib.h"
@@ -1465,11 +1467,13 @@ extern int outprcopts(uint8_t *buff, const prcopt_t *opt)
         if (opt->navsys&sys[i]) p+=sprintf(p," %s",s7[i]);
     }
     p+=sprintf(p,"\r\n");
+    p+=sprintf(p,"%s ar sys    :",COMMENTH);
+    for (i=0;sys[i];i++) {
+        if (opt->arsys&sys[i]) p+=sprintf(p," %s",s7[i]);
+    }
+    p+=sprintf(p,"\r\n");
     if (PMODE_KINEMA<=opt->mode&&opt->mode<=PMODE_PPP_FIXED) {
         p+=sprintf(p,"%s amb res   : %s\r\n",COMMENTH,s8[opt->modear]);
-        if (opt->navsys&SYS_GLO) {
-            p+=sprintf(p,"%s amb glo   : %s\r\n",COMMENTH,s9[opt->glomodear]);
-        }
         if (opt->thresar[0]>0.0) {
             p+=sprintf(p,"%s val thres : %.1f\r\n",COMMENTH,opt->thresar[0]);
         }
