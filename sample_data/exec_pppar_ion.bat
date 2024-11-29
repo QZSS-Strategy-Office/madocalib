@@ -13,10 +13,10 @@ set NAV=.\TSK200JPN_S_20241620000_01D_MN.rnx
 set L6E=.\2024162all.204.l6
 
 rem for Japan and Eastern Australia Region
-set L6D=.\2024162all.201.l6
+set L6D2=.\2024162all.201.l6
 
 rem for Southeast Asia and Western Australia Region
-rem set L6D=.\2024162all.200.l6
+set L6D1=.\2024162all.200.l6
 set OUT=.\result
 
 mkdir %OUT%
@@ -28,7 +28,7 @@ for /l %%H in (0,1,23) do (
         set "HH=%%H"
     )
     
-    %BIN% -k %CONF% -ts 2024/06/10 !HH!:00:00 -te 2024/06/10 !HH!:59:30 %OBS% %NAV% %L6E% -mdciono %L6D% -o %OUT%\pppar_ion_20240610!HH!.pos -x 2
+    %BIN% -k %CONF% -ts 2024/06/10 !HH!:00:00 -te 2024/06/10 !HH!:59:30 %OBS% %NAV% %L6E% -mdciono %L6D1% -mdciono %L6D2% -o %OUT%\pppar_ion_20240610!HH!.pos -x 2
     
 )
 pause

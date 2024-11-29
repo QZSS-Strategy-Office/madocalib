@@ -58,7 +58,7 @@ tides.o    : $(SRC)/tides.c
 	$(CC) -c $(CFLAGS) $(SRC)/tides.c
 mdccssr.o  : $(SRC)/mdccssr.c
 	$(CC) -c $(CFLAGS) $(SRC)/mdccssr.c
-mdciono.o  : $(SRC)/mdccssr.c
+mdciono.o  : $(SRC)/mdciono.c
 	$(CC) -c $(CFLAGS) $(SRC)/mdciono.c
 rnx2rtkp.o : $(SRC)/rtklib.h
 rtkcmn.o   : $(SRC)/rtklib.h

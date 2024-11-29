@@ -34,6 +34,7 @@
 *           2024/03/15 1.14 add VER_MADOCALIB
 *           2024/06/17 1.15 VER_MADOCALIB 1.2
 *           2024/07/23 1.16 VER_MADOCALIB 1.3
+*           2024/09/27 1.17 VER_MADOCALIB 1.4
 *-----------------------------------------------------------------------------*/
 #ifndef RTKLIB_H
 #define RTKLIB_H
@@ -65,7 +66,7 @@ extern "C" {
 /* constants -----------------------------------------------------------------*/
 
 #define VER_RTKLIB  "2.4.3"             /* library version */
-#define VER_MADOCALIB "1.3"
+#define VER_MADOCALIB "1.4"
 
 #define PATCH_LEVEL "b34"               /* patch level */
 
@@ -518,11 +519,12 @@ extern "C" {
 #define P2_50       8.881784197001252E-16 /* 2^-50 */
 #define P2_55       2.775557561562891E-17 /* 2^-55 */
 
-#define NSYS_MIONO         4            /* number of MADOCA-PPP iono. corr. support systems */
 #define MIONO_MAX_RID    256            /* max region id   (IS-QZSS-MDC-002 Table 6.3.2-4) */
 #define MIONO_MAX_ANUM    32            /* max area number                 (Table 6.3.2-4) */
 #define MIONO_MAX_AGE    300.0          /* max age of STEC corr.(s)        (Table 6.3.2-3) */
+#define MIONO_MAX_PRN    (2+1)          /* Max defined MADOCA-PPP L6D signal (Table 3-1) + 1 (reserved) */
 
+    
 #ifdef WIN32
 #define thread_t    HANDLE
 #define lock_t      CRITICAL_SECTION
@@ -1082,7 +1084,7 @@ typedef struct {        /* processing options type */
     char pppopt[256];   /* ppp option */
     char rtcmopt[256];  /* rtcm options */
     int  pppsig[4];     /* signal selection [0]GPS IIR-M,[1]GPS IIF,[2]GPS IIIA,[3]QZS-1/2 */
-    char *l6dpath;      /* MADOCA-PPP ionospheric correction L6D file path */
+    char *l6dpath[MIONO_MAX_PRN]; /* MADOCA-PPP ionospheric correction L6D file path */
 } prcopt_t;
 
 typedef struct {        /* solution options type */

@@ -70,6 +70,13 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                       Apply phase bias correction only when performing 
                       ambiguity resolution.
                       Other performance improvements.
+* 2024/11/22 1.4  - The 4th public version.
+                      Support for multiple L6D file input for rnx2rtkp.
+                      Antenna file path can be specified by command line option of rnx2rtkp.
+                      Support upper case hour code (%HU-> h : hour code (A=0,B=1,C=2,...,X=23)).
+                      Fix bug for incorrect maxframe calculation for L6D decoding.
+                      Apply phase bias correction even when ambiguity resolution 
+                      is not performed.
 
 #NOTES
 

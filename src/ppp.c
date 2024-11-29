@@ -84,6 +84,9 @@
 *                           ambiguity resolution.
 *                           change the sign of the phase bias correction to 
 *                           correspond to IS-QZSS-MDC (ref.[12]).
+*           2024/09/27 1.22 delete NM,IM
+*           2024/11/13 1.23 apply phase bias correction even when ambiguity 
+*                           resolution is not performed.
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -132,15 +135,13 @@
 #define NP(opt)     ((opt)->dynamics?9:3)
 #define NC(opt)     (NSYS)
 #define NT(opt)     ((opt)->tropopt<TROPOPT_EST?0:((opt)->tropopt==TROPOPT_EST?1:3))
-#define NM(opt)     (NSYS_MIONO)
 #define NI(opt)     ((opt)->ionoopt==IONOOPT_EST?MAXSAT:0)
-#define NR(opt)     (NP(opt)+NC(opt)+NT(opt)+NM(opt)+NI(opt))
+#define NR(opt)     (NP(opt)+NC(opt)+NT(opt)+NI(opt))
 #define NB(opt)     (NF(opt)*MAXSAT)
 #define NX(opt)     (NR(opt)+NB(opt))
 #define IC(s,opt)   (NP(opt)+(s))
 #define IT(opt)     (NP(opt)+NC(opt))
-#define IM(s,opt)   (NP(opt)+NC(opt)+NT(opt)+(s))
-#define II(s,opt)   (NP(opt)+NC(opt)+NT(opt)+NM(opt)+(s)-1)
+#define II(s,opt)   (NP(opt)+NC(opt)+NT(opt)+(s)-1)
 #define IB(s,f,opt) (NR(opt)+MAXSAT*(f)+(s)-1)
 
 /* standard deviation of state -----------------------------------------------*/
@@ -433,8 +434,7 @@ static void corr_meas(const obsd_t *obs, const nav_t *nav, const double *azel,
             trace(3,"corr_meas cbias %s %s obscode=%2d ssrcode=%2d cbias=%7.3f\n",
                 tstr,satid,obs->code[i],ssrcode,cb);
         }
-        if((opt->modear>ARMODE_OFF) && (opt->arsys&sys) &&
-            pb!=0.0) {
+        if(pb!=0.0) {
             L[i]+=pb;
             trace(3,"corr_meas pbias %s %s obscode=%2d ssrcode=%2d pbias=%7.3f\n",
                 tstr,satid,obs->code[i],ssrcode,pb);
