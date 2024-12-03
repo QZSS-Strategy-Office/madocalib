@@ -3,6 +3,7 @@
 *
 *          Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
 *          Copyright (C) 2023-2024 Japan Aerospace Exploration Agency. All Rights Reserved.
+*          Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2012-2015 by T.TAKASU, All rights reserved.
 *
 * reference :
@@ -22,6 +23,7 @@
 *                            support MADOCA-PPP ionospheric corrections, add NM
 *                            delete L5-receiver-dcb estimation, ND
 *                            support option opt->arsys in gen_sat_sd()
+*           2024/09/27  1.7  delete NM
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -44,9 +46,8 @@
 #define NP(opt)     ((opt)->dynamics?9:3)
 #define NC(opt)     (NSYS)
 #define NT(opt)     ((opt)->tropopt<TROPOPT_EST?0:((opt)->tropopt==TROPOPT_EST?1:3))
-#define NM(opt)     (4)
 #define NI(opt)     ((opt)->ionoopt==IONOOPT_EST?MAXSAT:0)
-#define NR(opt)     (NP(opt)+NC(opt)+NT(opt)+NM(opt)+NI(opt))
+#define NR(opt)     (NP(opt)+NC(opt)+NT(opt)+NI(opt))
 #define IB(s,f,opt) (NR(opt)+MAXSAT*(f)+(s)-1)
 
 /* generate satellite SD (single-difference) ---------------------------------*/

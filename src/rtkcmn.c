@@ -2,6 +2,7 @@
 * rtkcmn.c : rtklib common functions
 *
 *          Copyright (C) 2023 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2007-2020 by T.TAKASU, All rights reserved.
 *
 * options : -DLAPACK   use LAPACK/BLAS
@@ -147,6 +148,7 @@
 *           2024/01/10 1.47 support MADOCA-PPP ionospheric corrections
 *                           add pos2-ionocorr, pos2-arsys, stats-prnbsys in prcopt
 *           2024/06/06 1.48 delete stats-prnbsys.
+*           2024/09/27 1.49 support upper case hour code in reppath().
 *-----------------------------------------------------------------------------*/
 #define _POSIX_C_SOURCE 199506
 #include <stdarg.h>
@@ -3436,6 +3438,7 @@ static int repstr(char *str, const char *pat, const char *rep)
 *              %W -> wwww : gps week        (0001-9999)
 *              %D -> d    : day of gps week (0-6)
 *              %H -> h    : hour code       (a=0,b=1,c=2,...,x=23)
+*              %HU-> h    : hour code       (A=0,B=1,C=2,...,X=23)
 *              %ha-> hh   : 3 hours         (00,03,06,...,21)
 *              %hb-> hh   : 6 hours         (00,06,12,18)
 *              %hc-> hh   : 12 hours        (00,12)
@@ -3473,6 +3476,7 @@ extern int reppath(const char *path, char *rpath, gtime_t time, const char *rov,
         sprintf(rep,"%03d",  doy);                stat|=repstr(rpath,"%n",rep);
         sprintf(rep,"%04d",  week);               stat|=repstr(rpath,"%W",rep);
         sprintf(rep,"%d",    dow);                stat|=repstr(rpath,"%D",rep);
+        sprintf(rep,"%c",    'A'+(int)ep[3]);     stat|=repstr(rpath,"%HU",rep);
         sprintf(rep,"%c",    'a'+(int)ep[3]);     stat|=repstr(rpath,"%H",rep);
         sprintf(rep,"%02d",  ((int)ep[4]/15)*15); stat|=repstr(rpath,"%t",rep);
     }
@@ -3480,7 +3484,8 @@ extern int reppath(const char *path, char *rpath, gtime_t time, const char *rov,
              strstr(rpath,"%Y" )||strstr(rpath,"%y" )||strstr(rpath,"%m" )||
              strstr(rpath,"%d" )||strstr(rpath,"%h" )||strstr(rpath,"%M" )||
              strstr(rpath,"%S" )||strstr(rpath,"%n" )||strstr(rpath,"%W" )||
-             strstr(rpath,"%D" )||strstr(rpath,"%H" )||strstr(rpath,"%t" )) {
+             strstr(rpath,"%D" )||strstr(rpath,"%HU")||strstr(rpath,"%t" )||
+             strstr(rpath,"%H")) {
         return -1; /* no valid time */
     }
     return stat;

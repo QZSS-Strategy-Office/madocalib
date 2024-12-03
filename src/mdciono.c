@@ -2,6 +2,7 @@
 * mdciono.c : QZSS L6D signal MADOCA-PPP wide area ionospheric correction message decode functions
 *
 * Copyright (C) 2024 TOSHIBA ELECTRONIC TECHNOLOGIES CORPORATION. All Rights Reserved.
+* Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *
 * references :
 *     [1]  CAO IS-QZSS-MDC-002, November, 2023
@@ -11,6 +12,9 @@
 *           2024/02/10 1.1  fix bug on when the last byte of R-S is the same as
 *                           the first byte of the preamble in input_qzssl6d()
 *           2024/07/23 1.2  delete unnecessary constant.
+*           2024/09/27 1.3  fix bug for incorrect maxframe calculation
+*                           in decode_qzss_l6dmsg().
+*                           support multiple inputs of l6d stream.
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -37,8 +41,6 @@
 #define MIONO_INVALID_12BIT     -2048
 #define MIONO_INVALID_10BIT      -512
 #define MIONO_INVALID_8BIT       -128
-
-#define MIONO_MAX_PRN               2   /* Max defined MADOCA-PPP L6D signal (Table 3-1) */
 
 #define MIONO_URA_UNDEF           0.0   /* Note, If undefined, worst case value is assumed. */
 
@@ -250,26 +252,33 @@ extern int decode_qzss_l6dmsg(mdcl6d_t *mdcl6d)
     type  =getbitu(mdcl6d->buff, i,  8);        /* L6 Msg. Type ID */
     vid   =getbitu(mdcl6d->buff, i,  3); i+= 3; /* Vendor ID(2:MADOCA-PPP) */
     mgfid =getbitu(mdcl6d->buff, i,  2); i+= 2; /* Msg. Gen. Facility ID(0-1:Hitachi-Ota,2-3:Kobe) */
-    csid  =getbitu(mdcl6d->buff, i,  1); i+= 1; /* Correction Service ID(0:Clock/Ephemeris) */
+    csid  =getbitu(mdcl6d->buff, i,  1); i+= 1; /* Correction Service ID(1:Ionospheric Corrections) */
     anme  =getbitu(mdcl6d->buff, i,  1); i+= 1; /* Applicable Nav. Msg. Ext.(0:Default,1:CNAV/CNAV2) */
     si    =getbitu(mdcl6d->buff, i,  1); i+= 1; /* Subframe Indicator(0:others,1:First Data) */
     alert =getbitu(mdcl6d->buff, i,  1); i+= 1; /* Alert Flag(1:Alert) */
     
+    switch(prn) {                          /* ref [1] Table 3-1 */
+        case 200 : j=0; break;
+        case 201 : j=1; break;
+        case 197 : j=2; break; /* for test */
+        default  : trace(3,"decode_qzss_l6dmsg: invalid prn=%d\n",prn); return -1;
+    }
+    
     trace(3,"decode_qzss_l6dmsg: %s,preamb=0x%08X,prn=%d,type=0x%X(vid=%d,mgfid=%d,csid=%d,anme=%d,si=%d),alert=%d\n",
-        time_str(_miono[0].gt,3),preamb,prn,type,vid,mgfid,csid,anme,si,alert);
+        time_str(_miono[j].gt,3),preamb,prn,type,vid,mgfid,csid,anme,si,alert);
 
     if (preamb != L6PREAMB) {
         trace(2,"decode_qzss_l6dmsg: %s,invalid preamb=0x%08X\n",
-            time_str(_miono[0].gt,3),preamb);
+            time_str(_miono[j].gt,3),preamb);
         return -1;
     }
 
     if (alert) {
         if (strstr(mdcl6d->opt,"-IGNORE_MIONO_ALERT")) {
-            trace(3,"decode_qzss_l6dmsg: ignore alert\n",time_str(_miono[0].gt,3));
+            trace(3,"decode_qzss_l6dmsg: ignore alert\n",time_str(_miono[j].gt,3));
         }
         else {
-            trace(2,"decode_qzss_l6dmsg: alert\n",time_str(_miono[0].gt,3));
+            trace(2,"decode_qzss_l6dmsg: alert\n",time_str(_miono[j].gt,3));
             return -1;
         }
     }
@@ -284,12 +293,6 @@ extern int decode_qzss_l6dmsg(mdcl6d_t *mdcl6d)
         }
     }
 
-    switch(prn) {                          /* ref [1] Table 3-1 */
-        case 200 : j=0; break;
-        case 201 : j=1; break;
-        default  : trace(3,"decode_qzss_l6dmsg: invalid prn=%d\n",prn); return -1;
-    }
-
     if(si == 1) _miono[j].maxframe = 0;    /* Subframe Indicator : First Data */
 
     /* frame recognition */
@@ -298,8 +301,8 @@ extern int decode_qzss_l6dmsg(mdcl6d_t *mdcl6d)
 
         if(mn == MIONO_MT_COV) {
             corlen = getbitu(mdcl6d->buff, i+54, 16); /* Length of Correction Messages */
-            narea  = getbitu(mdcl6d->buff, i+70,  5); /* Length of Correction Messages */
-            _miono[j].maxframe = (L6HEAD_BITLEN + 75 + narea * 45 + corlen) / L6DATA_BITLEN + 1;
+            narea  = getbitu(mdcl6d->buff, i+70,  5); /* No. of Area */
+            _miono[j].maxframe = (75 + narea * 45 + corlen) / L6DATA_BITLEN + 1;
             trace(3,"decode_qzss_l6dmsg: %s,mn=%d,maxframe=%d,corlen=%d,narea=%d\n",
                 time_str(_miono[j].gt,3),mn,_miono[j].maxframe,corlen,narea);
             _miono[j].frame=0;
@@ -511,7 +514,10 @@ static miono_area_t *miono_sel_area(pppiono_t *pppiono, const double *rr,
         }
     }
 
-    if(min_i == -1) return NULL;
+    if(min_i == -1) {
+        trace(2,"miono_sel_area: no corresponding area. lat=%.2f,lon=%.2f\n", ll[0],ll[1]);
+        return NULL;
+    }
     pppiono->rid  = min_i;
     pppiono->anum = min_j;
     return &pppiono->re[min_i].area[min_j];

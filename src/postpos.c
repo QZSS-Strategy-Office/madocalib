@@ -2,6 +2,7 @@
 * postpos.c : post-processing positioning
 *
 *          Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2007-2020 by T.TAKASU, All rights reserved.
 *
 * version : $Revision: 1.1 $ $Date: 2008/07/17 21:48:06 $
@@ -51,6 +52,7 @@
 *                            add update_qzssl6d(), update_statcorr()
 *           2024/02/15  1.27 fix bug on not work file swap with *.l6, and *.stat
 *           2024/03/15  1.28 change solution program from RTKLIB to MADOCALIB
+*           2024/09/27  1.29 support multiple files of qzssl6d_file.
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -86,13 +88,13 @@ static char rtcm_file[1024]=""; /* rtcm data file */
 static char rtcm_path[1024]=""; /* rtcm data path */
 static rtcm_t rtcm;             /* rtcm control struct */
 static FILE *fp_rtcm=NULL;      /* rtcm data file pointer */
-static char qzssl6e_file[1024]="";/* QZSS L6E data file */
-static char qzssl6e_path[1024]="";/* QZSS L6E data path */
-static FILE *fp_qzssl6e=NULL;     /* QZSS L6E data file pointer */
-static mdcl6d_t mdcl6d;         /* QZSS L6D control struct */
-static char qzssl6d_file[1024]="";/* QZSS L6D data file */
-static char qzssl6d_path[1024]="";/* QZSS L6D data path */
-static FILE *fp_qzssl6d=NULL;     /* QZSS L6D data file pointer */
+static char qzssl6e_file[1024]="";                 /* QZSS L6E data file */
+static char qzssl6e_path[1024]="";                 /* QZSS L6E data path */
+static FILE *fp_qzssl6e=NULL;                      /* QZSS L6E data file pointer */
+static mdcl6d_t mdcl6d[MIONO_MAX_PRN];                /* QZSS L6D control struct */
+static char qzssl6d_file[MIONO_MAX_PRN][1024]={{0}};  /* QZSS L6D data file */
+static char qzssl6d_path[MIONO_MAX_PRN][1024]={{0}};  /* QZSS L6D data path */
+static FILE *fp_qzssl6d[MIONO_MAX_PRN]={NULL};        /* QZSS L6D data file pointer */
 static char stat_file[1024]=""; /* stat correction data file */
 static char stat_path[1024]=""; /* stat correction data path */
 static FILE *fp_stat=NULL;      /* stat correction data file pointer */
@@ -139,7 +141,7 @@ static void outrpos(FILE *fp, const double *r, const solopt_t *opt)
 }
 /* output header -------------------------------------------------------------*/
 static void outheader(FILE *fp, char **file, int n, const prcopt_t *popt,
-                      const solopt_t *sopt)
+                      const solopt_t *sopt, const filopt_t *fopt)
 {
     const char *s1[]={"GPST","UTC","JST"};
     gtime_t ts,te;
@@ -162,7 +164,11 @@ static void outheader(FILE *fp, char **file, int n, const prcopt_t *popt,
         for (i=0;i<n;i++) {
             fprintf(fp,"%s inp file  : %s\n",COMMENTH,file[i]);
         }
-        if(popt->l6dpath)fprintf(fp,"%s inp file  : %s\n",COMMENTH,popt->l6dpath);
+        for (i=0;i<MIONO_MAX_PRN;i++) {
+            if(popt->l6dpath[i]) fprintf(fp,"%s inp file  : %s\n",COMMENTH,popt->l6dpath[i]);
+        }
+        fprintf(fp,"%s satantfile: %s\n",COMMENTH,fopt->satantp);
+        fprintf(fp,"%s rcvantfile: %s\n",COMMENTH,fopt->rcvantp);
         for (i=0;i<obss.n;i++)    if (obss.data[i].rcv==1) break;
         for (j=obss.n-1;j>=0;j--) if (obss.data[j].rcv==1) break;
         if (j<i) {fprintf(fp,"\n%s no rover obs data\n",COMMENTH); return;}
@@ -296,58 +302,67 @@ static void update_qzssl6e(gtime_t time)
         if (input_qzssl6ef(&rtcm, fp_qzssl6e)<-1) break;
     }
 }
+/* initialize QZSS L6D control struct -----------------------------------------*/
+static void init_mdcl6d(gtime_t time, const char *pppopt)
+{
+    int i,j,k;
+    trace(2, "init_mdcl6d(%3d): time=%s\n", __LINE__,time_str(time, 0));
+    
+    for (k=0;k<MIONO_MAX_PRN;k++) {
+        strcpy(mdcl6d[k].opt, pppopt);
+        mdcl6d[k].time=time;
+        mdcl6d[k].nbyte=mdcl6d[k].re.rvalid=0;
+        for (i = 0; i < MIONO_MAX_ANUM; i++) {
+            mdcl6d[k].re.area[i].avalid=0;
+            for (j = 0; j < MAXSAT; j++) {
+                mdcl6d[k].re.area[i].sat[j].t0.time=0;
+            }
+        }
+        init_miono(time);
+    }
+}
 /* update QZSS L6D MADOCA-PPP ionospheric corrections ------------------------*/
-static void update_qzssl6d(gtime_t time, const char *pppopt)
+static void update_qzssl6d(gtime_t time, int n, const char *pppopt)
 {
     static int init_flg=1;
     char path[1024],tstr[32];
     int i,j;
 
     /* open or swap QZSS L6D file, record bit size is 1744(w/o R-S) or 2000 */
-    reppath(qzssl6d_file,path,time,"", "");
+    reppath(qzssl6d_file[n],path,time,"", "");
 
-    if (strcmp(path, qzssl6d_path)) {
-        strcpy(qzssl6d_path, path);
+    if (strcmp(path, qzssl6d_path[n])) {
+        strcpy(qzssl6d_path[n], path);
 
-        if (fp_qzssl6d) fclose(fp_qzssl6d);
-        fp_qzssl6d=fopen(path, "rb");
-        if (fp_qzssl6d) {
+        if (fp_qzssl6d[n]) fclose(fp_qzssl6d[n]);
+        fp_qzssl6d[n]=fopen(path, "rb");
+        if (fp_qzssl6d[n]) {
             trace(2, "qzssl6d file open: %s\n", path);
         }
     }
-    if (!fp_qzssl6d) return;
+    if (!fp_qzssl6d[n]) return;
 
-    if(init_flg){
-        strcpy(mdcl6d.opt, pppopt);
-        mdcl6d.time=time;
-        mdcl6d.nbyte=mdcl6d.re.rvalid=0;
-        for (i = 0; i < MIONO_MAX_ANUM; i++) {
-            mdcl6d.re.area[i].avalid=0;
-            for (j = 0; j < MAXSAT; j++) {
-                mdcl6d.re.area[i].sat[j].t0.time=0;
-            }
-        }
-        init_miono(time);
+    if (init_flg) {
+        init_mdcl6d(time,pppopt);
         init_flg=0;
     }
-
-    while (timediff(mdcl6d.time,time)<1E-3) {
-        strcpy(tstr,time_str(mdcl6d.time, 3));
+    while (timediff(mdcl6d[n].time,time)<1E-3) {
+        strcpy(tstr,time_str(mdcl6d[n].time, 3));
         trace(3, "update_qzssl6d: %s %s\n", time_str(time, 3), tstr);
 
         /* update QZSS L6D MADOCA-PPP ionospheric corrections */
-        if(mdcl6d.re.rvalid) {
-            navs.pppiono.re[mdcl6d.rid] = mdcl6d.re;
-            mdcl6d.re.rvalid=0;
+        if(mdcl6d[n].re.rvalid) {
+            navs.pppiono.re[mdcl6d[n].rid] = mdcl6d[n].re;
+            mdcl6d[n].re.rvalid=0;
             for (i = 0; i < MIONO_MAX_ANUM; i++) {
-                mdcl6d.re.area[i].avalid=0;
+                mdcl6d[n].re.area[i].avalid=0;
                 for (j = 0; j < MAXSAT; j++) {
-                    mdcl6d.re.area[i].sat[j].t0.time=0;
+                    mdcl6d[n].re.area[i].sat[j].t0.time=0;
                 }
             }
         }
 
-        if (input_qzssl6df(&mdcl6d, fp_qzssl6d)<-1) break;
+        if (input_qzssl6df(&mdcl6d[n], fp_qzssl6d[n])<-1) break;
     }
 }
 /* update STEC corrections ---------------------------------------------------*/
@@ -379,7 +394,7 @@ static void update_statcorr(gtime_t time)
 static int inputobs(obsd_t *obs, int solq, const prcopt_t *popt)
 {
     gtime_t time={0};
-    int i,nu,nr,n=0;
+    int i,j,nu,nr,n=0;
     
     trace(3,"infunc  : revs=%d iobsu=%d iobsr=%d isbs=%d\n",revs,iobsu,iobsr,isbs);
     
@@ -426,8 +441,10 @@ static int inputobs(obsd_t *obs, int solq, const prcopt_t *popt)
             update_qzssl6e(obs[0].time);
         }
         /* update QZSS L6D MADOCA-PPP ionospheric corrections */
-        if (*qzssl6d_file) {
-            update_qzssl6d(obs[0].time, popt->pppopt);
+        for (j=0;j<MIONO_MAX_PRN;j++) {
+            if (*qzssl6d_file[j]) {
+                update_qzssl6d(obs[0].time, j, popt->pppopt);
+            }
         }
         /* update STEC corrections */
         if (*stat_file) {
@@ -661,7 +678,7 @@ static void readpreceph(char **infile, int n, const prcopt_t *prcopt,
                         nav_t *nav, sbs_t *sbs)
 {
     seph_t seph0={0};
-    int i;
+    int i,nf=0;
     char *ext;
     
     trace(2,"readpreceph: n=%d\n",n);
@@ -699,7 +716,9 @@ static void readpreceph(char **infile, int n, const prcopt_t *prcopt,
 
     /* set MADOCA-PPP file */
     qzssl6e_file[0]=qzssl6e_path[0]='\0'; fp_qzssl6e=NULL;
-    qzssl6d_file[0]=qzssl6d_path[0]='\0'; fp_qzssl6d=NULL;
+    for (i=0;i<MIONO_MAX_PRN;i++) {
+        qzssl6d_file[i][0]=qzssl6d_path[i][0]='\0'; fp_qzssl6d[i]=NULL;
+    }
     stat_file[0]   =stat_path[0]   ='\0'; fp_stat   =NULL;
 
     for (i=0;i<n;i++) {
@@ -711,18 +730,32 @@ static void readpreceph(char **infile, int n, const prcopt_t *prcopt,
             break;
         }
     }
-
+    
+    /* MADOCA-PPP L6 file */
     for (i=0;i<n;i++) {
         if ((ext=strrchr(infile[i],'.'))&&
             (!strcmp(ext,".l6")||!strcmp(ext,".L6"))) {
-            strcpy(qzssl6e_file,infile[i]);
-            init_rtcm(&rtcm);
-            strcpy(rtcm.opt, prcopt->rtcmopt);
-            break;
+            
+            /* L6D (PRN=200,201) */
+            if (!strcmp(ext-4,".200.l6")||!strcmp(ext-4,".200.L6")||
+                !strcmp(ext-4,".201.l6")||!strcmp(ext-4,".201.L6")) {
+                if (nf<MIONO_MAX_PRN) strcpy(qzssl6d_file[nf++],infile[i]);
+            }
+            else { /* L6E */
+                if (*qzssl6e_file) continue;
+                strcpy(qzssl6e_file,infile[i]);
+                init_rtcm(&rtcm);
+                strcpy(rtcm.opt, prcopt->rtcmopt);
+            }
         }
     }
-
-    if (prcopt->l6dpath)strcpy(qzssl6d_file,prcopt->l6dpath);
+    
+    /* MADOCA-PPP L6D file specified by -mdciono option */
+    for (i=0;i<MIONO_MAX_PRN;i++) {
+        if (prcopt->l6dpath[i]) {
+            if (nf<MIONO_MAX_PRN) strcpy(qzssl6d_file[nf++],prcopt->l6dpath[i]);
+        }
+    }
 
     for (i=0;i<n;i++) {
         if ((ext=strrchr(infile[i],'.'))&&
@@ -986,6 +1019,8 @@ static void setpcv(gtime_t time, prcopt_t *popt, nav_t *nav, const pcvs_t *pcvs,
     int i,j,mode=PMODE_DGPS<=popt->mode&&popt->mode<=PMODE_FIXED;
     char id[64];
     
+    trace(3,"setpcv:\n");
+    
     /* set satellite antenna parameters */
     for (i=0;i<MAXSAT;i++) {
         nav->pcvs[i]=pcv0;
@@ -1032,7 +1067,8 @@ static void readotl(prcopt_t *popt, const char *file, const sta_t *sta)
 }
 /* write header to output file -----------------------------------------------*/
 static int outhead(const char *outfile, char **infile, int n,
-                   const prcopt_t *popt, const solopt_t *sopt)
+                   const prcopt_t *popt, const solopt_t *sopt, 
+                   const filopt_t *fopt)
 {
     FILE *fp=stdout;
     
@@ -1047,7 +1083,7 @@ static int outhead(const char *outfile, char **infile, int n,
         }
     }
     /* output header */
-    outheader(fp,infile,n,popt,sopt);
+    outheader(fp,infile,n,popt,sopt,fopt);
     
     if (*outfile) fclose(fp);
     
@@ -1138,7 +1174,7 @@ static int execses(gtime_t ts, gtime_t te, double ti, const prcopt_t *popt,
         rtkopenstat(statfile,sopt->sstat);
     }
     /* write header to output file */
-    if (flag&&!outhead(outfile,infile,n,&popt_,sopt)) {
+    if (flag&&!outhead(outfile,infile,n,&popt_,sopt,fopt)) {
         freeobsnav(&obss,&navs);
         return 0;
     }

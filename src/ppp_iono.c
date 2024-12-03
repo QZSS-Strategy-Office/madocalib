@@ -12,6 +12,7 @@
 *           2024/05/24 1.1  algorithm correction for const_iono_corr().
 *                           change convergence threshold (H,V) from 
 *                           0.3,0.5 to 2.0,3.0.
+*           2024/09/27 1.2  delete NM
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -27,9 +28,8 @@
 #define NP(opt)     ((opt)->dynamics?9:3)
 #define NC(opt)     (NSYS)
 #define NT(opt)     ((opt)->tropopt<TROPOPT_EST?0:((opt)->tropopt==TROPOPT_EST?1:3))
-#define NM(opt)     (NSYS_MIONO)
 #define IM(s,opt)   (NP(opt)+NC(opt)+NT(opt)+(s))
-#define II(s,opt)   (NP(opt)+NC(opt)+NT(opt)+NM(opt)+(s)-1)
+#define II(s,opt)   (NP(opt)+NC(opt)+NT(opt)+(s)-1)
 
 /* read stat correction data -------------------------------------------------
 * read ppp ionosphere correction data from stat file
