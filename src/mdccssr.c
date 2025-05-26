@@ -27,6 +27,8 @@
 *                           support phase discontinuity indicator for subtype 5.
 *                           change the sign of the phase bias correction to 
 *                           correspond to IS-QZSS-MDC (ref.[1]).
+*           2025/05/20 1.4  modify Compact SSR decoding function regarding 
+*                           undefined GNSS ID handling of Compact SSR.
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -49,7 +51,7 @@
 #define MCSSR_ST_PB                 5   /* Compact SSR GNSS Satellite Phase Bias */
 #define MCSSR_ST_URA                7   /* Compact SSR GNSS URA */
 
-#define MCSSR_MAX_SYS               5   /* GNSS ID (Table 4.2.2-7) w/o SBS */
+#define MCSSR_MAX_SYS              16   /* GNSS ID (Table 4.2.2-7) */
 #define MCSSR_SYS_GPS               0
 #define MCSSR_SYS_GLO               1
 #define MCSSR_SYS_GAL               2
@@ -67,6 +69,8 @@
 #define MCSSR_SATMASK_BDS_L  0xFF
 #define MCSSR_SATMASK_QZS_U  0xFFC00000u
 #define MCSSR_SATMASK_QZS_L  0x00
+#define MCSSR_SATMASK_RSV_U  0xFFFFFFFFu
+#define MCSSR_SATMASK_RSV_L  0xFF
 
 #define MCSSR_MAX_SIGMASK          16   /* Signal Mask (Table 4.2.2-9) */
 
@@ -102,6 +106,8 @@ const uint8_t cssr_sig_qzs[16]={
     CODE_L1C,CODE_L1S,CODE_L1L,CODE_L1X,CODE_L2S,CODE_L2L,CODE_L2X,CODE_L5I,
     CODE_L5Q,CODE_L5X,CODE_L6I,CODE_L6Q,CODE_L6X,CODE_L1A,       0,       0
 };
+
+const uint8_t cssr_sig_rsv[16]={0};
 
 /* MADOCA-PPP Sub Type Transmission Pattern (Figure 4.2.2-1) -----------------*/
 /* note : Change MCSSR_BYTELEN when defining 6 or more. */
@@ -152,7 +158,7 @@ static int gnssid2sys(const int gnssid)
         case MCSSR_SYS_BDS : return SYS_CMP;
         case MCSSR_SYS_QZS : return SYS_QZS;
     }
-    return -1;
+    return SYS_NONE;
 }
 /* ---------------------------------------------------------------------------*/
 static int svmask2list(const uint64_t mask, const int gnssid, int *satlist, int *gidlist)
@@ -185,7 +191,7 @@ static int sigmask2list(const uint16_t mask, const int gnssid, int *siglist)
         case MCSSR_SYS_GAL : sigs = cssr_sig_gal; break;
         case MCSSR_SYS_BDS : sigs = cssr_sig_cmp; break;
         case MCSSR_SYS_QZS : sigs = cssr_sig_qzs; break;
-        default: return 0;
+        default: sigs = cssr_sig_rsv;
     }
 
     for(i = 0; i < MCSSR_MAX_SIGMASK; i++){
@@ -262,9 +268,8 @@ static int decode_mcssr_mask(mcssr_t *mc, int i)
             case MCSSR_SYS_GAL : gnssmask = ((uint64_t)MCSSR_SATMASK_GAL_U) << 8 | MCSSR_SATMASK_GAL_L; break;
             case MCSSR_SYS_BDS : gnssmask = ((uint64_t)MCSSR_SATMASK_BDS_U) << 8 | MCSSR_SATMASK_BDS_L; break;
             case MCSSR_SYS_QZS : gnssmask = ((uint64_t)MCSSR_SATMASK_QZS_U) << 8 | MCSSR_SATMASK_QZS_L; break;
-            default :
-                trace(2,"decode_mcssr_mask: invalid gnssid=%d\n",gnssid);
-                return -1;
+            default            : gnssmask = ((uint64_t)MCSSR_SATMASK_RSV_U) << 8 | MCSSR_SATMASK_RSV_L;
+                                 trace(2,"decode_mcssr_mask: reserved gnssid=%d\n",gnssid);
         }
         svmask   = (uint64_t)getbitu(mc->buff, i, 8)<<32; i+=8;
         svmask  |= getbitu(mc->buff, i, 32); i+=32;     /* Sat mask */

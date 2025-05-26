@@ -77,6 +77,10 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                       Fix bug for incorrect maxframe calculation for L6D decoding.
                       Apply phase bias correction even when ambiguity resolution 
                       is not performed.
+* 2025/05/26 1.5  - The 5th public version.
+                      PPP processing is performed normally even when an undefined
+                      GNSSs are stored in the reserved GNSS ID of the Compact SSR.
+                      (See mdccssr.c)
 
 #NOTES
 

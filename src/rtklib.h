@@ -35,6 +35,7 @@
 *           2024/06/17 1.15 VER_MADOCALIB 1.2
 *           2024/07/23 1.16 VER_MADOCALIB 1.3
 *           2024/09/27 1.17 VER_MADOCALIB 1.4
+*           2025/05/20 1.18 VER_MADOCALIB 1.5
 *-----------------------------------------------------------------------------*/
 #ifndef RTKLIB_H
 #define RTKLIB_H
@@ -66,7 +67,7 @@ extern "C" {
 /* constants -----------------------------------------------------------------*/
 
 #define VER_RTKLIB  "2.4.3"             /* library version */
-#define VER_MADOCALIB "1.4"
+#define VER_MADOCALIB "1.5"
 
 #define PATCH_LEVEL "b34"               /* patch level */
 
