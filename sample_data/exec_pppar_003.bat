@@ -28,9 +28,9 @@ echo Input L6 messages are in
 echo .\data\l6_is-qzss-mdc-003
 echo.
 
-for /l %%h in (0,1,23) do (
+for /l %%H in (0,1,23) do (
     
-    %BIN% -ts 2025/04/01 %%h:00:00 -te 2025/04/01 %%h:59:30 -ti 30 -k %CONF% -o %OUT%\%%Y%%m%%d%%h%%M%%S.pos -ant %ANT% %OBS% %NAV% %L6E1% %L6E2%
+    %BIN% -ts 2025/04/01 %%H:00:00 -te 2025/04/01 %%H:59:30 -ti 30 -k %CONF% -o %OUT%\%%Y%%m%%d%%h%%M%%S.pos -ant %ANT% %OBS% %NAV% %L6E1% %L6E2%
     
 )
 echo Output files (*.pos) were stored in the following folder
