@@ -1,8 +1,8 @@
 /*------------------------------------------------------------------------------
 * ppp_iono.c : ppp ionospheric correction functions
 *
-*          Copyright (C) 2024 Cabinet Office, Japan, All rights reserved.
-*          Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+*          Copyright (C) 2024-2025 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024-2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *
 * references :
 *     [1]  CAO IS-QZSS-MDC-002, November, 2023
@@ -13,6 +13,7 @@
 *                           change convergence threshold (H,V) from 
 *                           0.3,0.5 to 2.0,3.0.
 *           2024/09/27 1.2  delete NM
+*           2025/03/25 1.3  unuse mapping function.
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -26,9 +27,8 @@
 
 /* number and index of states */
 #define NP(opt)     ((opt)->dynamics?9:3)
-#define NC(opt)     (NSYS)
+#define NC(opt)     (NSYS+1) /* BDS3 and BDS2 */
 #define NT(opt)     ((opt)->tropopt<TROPOPT_EST?0:((opt)->tropopt==TROPOPT_EST?1:3))
-#define IM(s,opt)   (NP(opt)+NC(opt)+NT(opt)+(s))
 #define II(s,opt)   (NP(opt)+NC(opt)+NT(opt)+(s)-1)
 
 /* read stat correction data -------------------------------------------------
@@ -85,10 +85,10 @@ extern int const_iono_corr(rtk_t *rtk, const obsd_t *obs, const nav_t *nav,
 {
     gtime_t time=obs[0].time;
     pppiono_corr_t corr;
-    int i,j,k,m,sat,nv=0,s,ns;
+    int i,j,k,sat,nv=0,s,ns;
     double tt,std,sd[2],pos[3],P[9],Q[9];
     double rejstd=IONO_REJ_STD,covratio=IONO_COV_RATIO,thre[2]={IONO_THRE_H,IONO_THRE_V};
-    double ave,bsys[NSYS]={0.0},f;
+    double ave,bsys[NSYS]={0.0};
     char *p,*tstr,satid[8];
     const int sys[NSYS]={SYS_GPS,SYS_GLO,SYS_GAL,SYS_QZS,0};
 
@@ -116,12 +116,15 @@ extern int const_iono_corr(rtk_t *rtk, const obsd_t *obs, const nav_t *nav,
     sd[0] = SQRT(Q[0]+Q[4]);   /* horizontal std */
     sd[1] = SQRT(Q[8]);        /* vertical   std */
 
-    trace(2,"const_iono_corr : sd=%8.4f,%8.4f,thre=%8.4f,%8.4f,rejstd=%.3f,covratio=%.9f\n",
+    trace(3,"const_iono_corr: sd=%6.2f,%6.2f,thre=%6.2f,%6.2f,rejstd=%.3f,covratio=%.3f\n",
         sd[0],sd[1],thre[0],thre[1],rejstd,covratio);
 
-    if((sd[0]!=0.0)&&(sd[1]!=0.0)&&(sd[0]<thre[0])&&(sd[1]<thre[1])) return 0;
+    if((sd[0]!=0.0)&&(sd[1]!=0.0)&&(sd[0]<thre[0])&&(sd[1]<thre[1])) {
+        trace(3,"const_iono_corr: skipped to constraint. std H:%6.2f<%6.2f V:%6.2f<%6.2f\n",
+            sd[0],thre[0],sd[1],thre[1]);
+        return 0;
+    }
 
-    m=IM(0,&rtk->opt);
     corr = nav->pppiono.corr;
     
     /* estimate system bias */
@@ -139,9 +142,8 @@ extern int const_iono_corr(rtk_t *rtk, const obsd_t *obs, const nav_t *nav,
             if (tt > MIONO_MAX_AGE) continue;
             if (corr.std[sat-1] > rejstd) continue;
             
-            f=ionmapf(pos,azel+i*2);
             j=II(sat,&rtk->opt);
-            ave+=(corr.dly[sat-1]-f*x[j]);
+            ave+=(corr.dly[sat-1]-x[j]);
             ns++;
         }
         if (ns>0) bsys[s]=ave/(double)ns;
@@ -169,14 +171,13 @@ extern int const_iono_corr(rtk_t *rtk, const obsd_t *obs, const nav_t *nav,
         if (corr.std[sat-1] > rejstd) continue;
 
         std = corr.std[sat-1];
-        f=ionmapf(pos,azel+i*2);
         j=II(sat,&rtk->opt);
-        v[nv]=corr.dly[sat-1]-f*x[j]-bsys[s];
+        v[nv]=corr.dly[sat-1]-x[j]-bsys[s];
 
-        trace(2,"const_iono_corr %s,%s,tt=%11d,az=%5.1f,el=%4.1f,sdly=%8.4f,std=%8.4f,v=%8.4f,f*x=%8.4f,bsys=%8.4f\n",
-            satid,tstr,(int)tt,(azel+i*2)[0]*R2D,(azel+i*2)[1]*R2D,corr.dly[sat-1],corr.std[sat-1],v[nv],f*x[j],bsys[s]);
+        trace(2,"const_iono_corr: %s,%s,tt=%11d,az=%5.1f,el=%4.1f,sdly=%8.4f,std=%8.4f,v=%8.4f,x=%8.4f,bsys=%8.4f\n",
+            satid,tstr,(int)tt,(azel+i*2)[0]*R2D,(azel+i*2)[1]*R2D,corr.dly[sat-1],corr.std[sat-1],v[nv],x[j],bsys[s]);
 
-        for (k=0;k<rtk->nx;k++) H[k+nv*rtk->nx]=k==j?f:0.0;
+        for (k=0;k<rtk->nx;k++) H[k+nv*rtk->nx]=k==j?1.0:0.0;
         var[nv++]=SQR(std)*covratio;
     }
     return nv;

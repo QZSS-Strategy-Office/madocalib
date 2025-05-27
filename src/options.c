@@ -1,7 +1,8 @@
 /*------------------------------------------------------------------------------
 * options.c : options functions
 *
-*          Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2023-2025 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2010-2020 by T.TAKASU, All rights reserved.
 *
 * version : $Revision:$ $Date:$
@@ -32,6 +33,9 @@
 *           2024/01/10  1.14 support MADOCA-PPP ionospheric corrections
 *                            add pos2-ionocorr, pos2-arsys, stats-prnbsys
 *           2024/06/06  1.15 delete stats-prnbsys.
+*           2025/03/10  1.16 add pos2-siggps, pos2-sigqzs, pos2-siggal, 
+*                             pos2-sigbds2, pos2-sigbds3
+*                            change pos1-frequency
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -47,13 +51,13 @@ static char snrmask_[NFREQ][1024];
 
 /* system options table ------------------------------------------------------*/
 #define SWTOPT  "0:off,1:on"
-#define MODOPT  "0:single,1:dgps,2:kinematic,3:static,4:movingbase,5:fixed,6:ppp-kine,7:ppp-static,8:ppp-fixed"
-#define FRQOPT  "1:l1,2:l1+2,3:l1+2+3,4:l1+2+3+4,5:l1+2+3+4+5"
-#define TYPOPT  "0:forward,1:backward,2:combined"
-#define IONOPT  "0:off,1:brdc,2:sbas,3:dual-freq,4:est-stec,5:ionex-tec,6:qzs-brdc"
+#define MODOPT  "0:single,6:ppp-kine,7:ppp-static,8:ppp-fixed"
+#define FRQOPT  "1:l1,2:l1+2,3:l1+2+3,4:l1+2+3+4"
+#define TYPOPT  "0:forward"
+#define IONOPT  "0:off,1:brdc,2:sbas,3:dual-freq,4:est-stec"
 #define TRPOPT  "0:off,1:saas,2:sbas,3:est-ztd,4:est-ztdgrad"
 #define EPHOPT  "0:brdc,1:precise,2:brdc+sbas,3:brdc+ssrapc,4:brdc+ssrcom"
-#define NAVOPT  "1:gps+2:sbas+4:glo+8:gal+16:qzs+32:bds+64:navic"
+#define NAVOPT  "1:gps+4:glo+8:gal+16:qzs+32:bds"
 #define GAROPT  "0:off,1:on"
 #define SOLOPT  "0:llh,1:xyz,2:enu,3:nmea"
 #define TSYOPT  "0:gpst,1:utc,2:jst"
@@ -63,13 +67,15 @@ static char snrmask_[NFREQ][1024];
 #define GEOOPT  "0:internal,1:egm96,2:egm08_2.5,3:egm08_1,4:gsi2000"
 #define STAOPT  "0:all,1:single"
 #define STSOPT  "0:off,1:state,2:residual"
-#define ARMOPT  "0:off,1:continuous,2:instantaneous,3:fix-and-hold"
+#define ARMOPT  "0:off,1:continuous,3:fix-and-hold"
 #define POSOPT  "0:llh,1:xyz,2:single,3:posfile,4:rinexhead,5:rtcm,6:raw"
 #define TIDEOPT "0:off,1:on,2:otl"
 #define PHWOPT  "0:off,1:on,2:precise"
-#define SIGOPT1 "0:L1C/A-L2P,1:L1C/A-L2C"
-#define SIGOPT2 "0:L1C/A-L2P,1:L1C/A-L2C,2:L1C/A-L5"
-#define SIGOPT3 "0:L1C-L5,1:L1C/A-L2C"
+#define SIGOPT1 "0:L1/L2,1:L1/L5,2:L1/L2/L5"
+#define SIGOPT2 "0:L1/L5,1:L1/L2,2:L1/L5/L2"
+#define SIGOPT3 "0:E1/E5a,1:E1/E5b,2:E1/E6,3:E1/E5a/E5b/E6,4:E1/E5a/E6/E5b"
+#define SIGOPT4 "0:B1I/B3I,1:B1I/B2I,2:B1I/B3I/B2I"
+#define SIGOPT5 "0:B1I/B3I,1:B1I/B2a,2:B1I/B3I/B2a"
 
 EXPORT opt_t sysopts[]={
     {"pos1-posmode",    3,  (void *)&prcopt_.mode,       MODOPT },
@@ -100,8 +106,8 @@ EXPORT opt_t sysopts[]={
     {"pos2-gloarmode",  3,  (void *)&prcopt_.glomodear,  GAROPT },
     {"pos2-bdsarmode",  3,  (void *)&prcopt_.bdsmodear,  SWTOPT },
     {"pos2-arsys",      0,  (void *)&prcopt_.arsys,      NAVOPT },
-    {"pos2-arthres",    1,  (void *)&prcopt_.thresar[0], ""     },
-    {"pos2-arthres1",   1,  (void *)&prcopt_.thresar[1], ""     },
+    {"pos2-arthres",    1,  (void *)&prcopt_.thresar[0], ""     },/* MADOCA-PPP : validation ratio for lambda search */
+    {"pos2-arthres1",   1,  (void *)&prcopt_.thresar[1], ""     },/* MADOCA-PPP : max std-dev (3d-pos) to start narrow-lane integer ambiguity search */
     {"pos2-arthres2",   1,  (void *)&prcopt_.thresar[2], ""     },
     {"pos2-arthres3",   1,  (void *)&prcopt_.thresar[3], ""     },
     {"pos2-arthres4",   1,  (void *)&prcopt_.thresar[4], ""     },
@@ -119,10 +125,11 @@ EXPORT opt_t sysopts[]={
     {"pos2-niter",      0,  (void *)&prcopt_.niter,      ""     },
     {"pos2-baselen",    1,  (void *)&prcopt_.baseline[0],"m"    },
     {"pos2-basesig",    1,  (void *)&prcopt_.baseline[1],"m"    },
-    {"pos2-siggpsIIR-M",0,  (void *)&prcopt_.pppsig[0],  SIGOPT1},
-    {"pos2-siggpsIIF",  0,  (void *)&prcopt_.pppsig[1],  SIGOPT2},
-    {"pos2-siggpsIIIA", 0,  (void *)&prcopt_.pppsig[2],  SIGOPT2},
-    {"pos2-sigqzs1_2",  0,  (void *)&prcopt_.pppsig[3],  SIGOPT3},
+    {"pos2-siggps",     3,  (void *)&prcopt_.pppsig[0],  SIGOPT1},
+    {"pos2-sigqzs",     3,  (void *)&prcopt_.pppsig[1],  SIGOPT2},
+    {"pos2-siggal",     3,  (void *)&prcopt_.pppsig[2],  SIGOPT3},
+    {"pos2-sigbds2",    3,  (void *)&prcopt_.pppsig[3],  SIGOPT4},
+    {"pos2-sigbds3",    3,  (void *)&prcopt_.pppsig[4],  SIGOPT5},
 
     {"out-solformat",   3,  (void *)&solopt_.posf,       SOLOPT },
     {"out-outhead",     3,  (void *)&solopt_.outhead,    SWTOPT },
@@ -158,6 +165,7 @@ EXPORT opt_t sysopts[]={
     {"stats-prniono",   1,  (void *)&prcopt_.prn[1],     "m"    },
     {"stats-prntrop",   1,  (void *)&prcopt_.prn[2],     "m"    },
     {"stats-prnpos",    1,  (void *)&prcopt_.prn[5],     "m"    },
+    {"stats-prnifb",    1,  (void *)&prcopt_.prn[6],     "m"    },
     {"stats-clkstab",   1,  (void *)&prcopt_.sclkstab,   "s/s"  },
     
     {"ant1-postype",    3,  (void *)&antpostype_[0],     POSOPT },
@@ -353,7 +361,6 @@ extern int loadopts(const char *file, opt_t *opts)
         *p++='\0';
         chop(buff);
         if (!(opt=searchopt(buff,opts))) continue;
-        
         if (!str2opt(opt,p)) {
             fprintf(stderr,"invalid option value %s (%s:%d)\n",buff,file,n);
             continue;
@@ -442,11 +449,6 @@ static void buff2sysopts(void)
             prcopt_.snrmask.mask[i][j++]=atof(p);
         }
     }
-    /* number of frequency (4:L1+L5) */
-    if (prcopt_.nf==4) {
-        prcopt_.nf=3;
-        prcopt_.freqopt=1;
-    }
 }
 /* options to system options buffer ------------------------------------------*/
 static void sysopts2buff(void)
@@ -488,11 +490,6 @@ static void sysopts2buff(void)
         for (j=0;j<9;j++) {
             p+=sprintf(p,"%s%.0f",j>0?",":"",prcopt_.snrmask.mask[i][j]);
         }
-    }
-    /* number of frequency (4:L1+L5) */
-    if (prcopt_.nf==3&&prcopt_.freqopt==1) {
-        prcopt_.nf=4;
-        prcopt_.freqopt=0;
     }
 }
 /* reset system options to default ---------------------------------------------

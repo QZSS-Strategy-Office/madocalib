@@ -1,7 +1,8 @@
 /*------------------------------------------------------------------------------
 * rtkpos.c : precise positioning
 *
-*          Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2023-2025 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2007-2020 by T.TAKASU, All rights reserved.
 *
 * version : $Revision: 1.1 $ $Date: 2008/07/17 21:48:06 $
@@ -50,6 +51,7 @@
 *           2023/02/01 1.17 branch from ver.2.4.3b34 for MADOCALIB
 *           2024/01/10 1.18 support MADOCA-PPP ionospheric corrections
 *                           change rtkinit(), rtkpos()
+*           2025/03/10 1.19 delete signal_replace(), signal_sel_ppp()
 *-----------------------------------------------------------------------------*/
 #include <stdarg.h>
 #include "rtklib.h"
@@ -884,7 +886,7 @@ static int zdres(int base, const obsd_t *obs, int n, const double *rs,
                  const nav_t *nav, const double *rr, const prcopt_t *opt,
                  int index, double *y, double *e, double *azel, double *freq)
 {
-    double r,rr_[3],pos[3],dant[NFREQ]={0},disp[3];
+    double r,rr_[3],pos[3],dant[NFREQPCV]={0},disp[3];
     double zhd,zazel[]={0.0,90.0*D2R};
     int i,nf=NF(opt);
     
@@ -1702,84 +1704,6 @@ extern void rtkfree(rtk_t *rtk)
     free(rtk->xa); rtk->xa=NULL;
     free(rtk->Pa); rtk->Pa=NULL;
 }
-/* signal replacement by code ------------------------------------------------*/
-static void signal_replace(obsd_t *obs, int idx, char f, char *c)
-{
-    int i,j;
-    char *code;
-
-    for(i=0;i<NFREQ+NEXOBS;i++){
-        code=code2obs(obs->code[i]);
-        for(j=0;c[j]!='\0';j++) if(code[0]==f && code[1]==c[j])break;
-        if(c[j]!='\0')break;
-    }
-    if(i<NFREQ+NEXOBS) {
-        obs->SNR[idx]=obs->SNR[i];obs->LLI[idx]=obs->LLI[i];obs->code[idx]=obs->code[i];
-        obs->L[idx]  =obs->L[i];  obs->P[idx]  =obs->P[i];  obs->D[idx]   =obs->D[i];
-    }
-    else {
-        obs->SNR[idx]=obs->LLI[idx]=obs->code[idx]=0;
-        obs->P[idx]  =obs->L[idx]  =obs->D[idx]   =0.0;
-    }
-}
-/* signal selection for PPP --------------------------------------------------*/
-static void signal_sel_ppp(obsd_t *pppobs, const nav_t *nav, const prcopt_t *opt, int ns)
-{
-    char sattype[MAXANT],satid[8],*tstr=time_str(pppobs->time, 3);
-    int  i,j,sigtype,sys;
-
-    for(i=0;i<ns;i++) {
-        sys=satsys(pppobs->sat,NULL);
-        sigtype=0; /* 0:GPS=L1C/A-L2P, GLO=G1-G2, GAL=E1-E5a, QZS=L1C-L5 */
-        strcpy(sattype,nav->pcvs[pppobs->sat-1].type);
-        for(j=strlen(sattype)-1;j>0;j--) {
-            if(sattype[j]!=' ')break;
-            sattype[j]='\0'; /* delete tail blank */
-        }
-        if      (0==strcmp(sattype,"BLOCK IIR-M")) sigtype=opt->pppsig[0]; /* 1:L1C/A-L2C */
-        else if (0==strcmp(sattype,"BLOCK IIF"  )) sigtype=opt->pppsig[1]; /* 1:L1C/A-L2C, 2:L1C/A-L5 */
-        else if (0==strcmp(sattype,"BLOCK IIIA" )) sigtype=opt->pppsig[2];
-        else if (0==strcmp(sattype,"QZSS"       )) sigtype=opt->pppsig[3]; /* 1:L1C/A-L2C */
-        else if (0==strcmp(sattype,"QZSS-2G"    )) sigtype=opt->pppsig[3];
-        else if (0==strcmp(sattype,"QZSS-2I"    )) sigtype=opt->pppsig[3];
-        else if (0==strcmp(sattype,"QZSS-2A"    )) sigtype=opt->pppsig[3];
-
-        switch (sys) {
-        case SYS_GPS:
-            signal_replace(pppobs,0,'1',"C");
-            if       (sigtype==0){  /* L1C/A-L2P */
-                signal_replace(pppobs,1,'2',"PYWCMND"); /* Note, codepries="PYWCMNDLXS" */
-            } else if(sigtype==1){  /* L1C/A-L2C */
-                signal_replace(pppobs,1,'2',"LXS");
-            } else if(sigtype==2){  /* L1C/A-L5 */
-                signal_replace(pppobs,1,'5',"QXI");
-            }
-            break;
-        case SYS_GLO:
-            signal_replace(pppobs,0,'1',"CP");
-            signal_replace(pppobs,1,'2',"PC");
-            break;
-        case SYS_GAL:
-            signal_replace(pppobs,0,'1',"CBX");
-            signal_replace(pppobs,1,'5',"QXI");
-            break;
-        case SYS_QZS:
-            if       (sigtype==0){  /* L1C-L5 */
-                signal_replace(pppobs,0,'1',"LXS");     /* Note, codepries="CLXS" */
-                signal_replace(pppobs,1,'5',"QXI");
-            } else if(sigtype==1){  /* L1C/A-L2C */
-                signal_replace(pppobs,0,'1',"C");
-                signal_replace(pppobs,1,'2',"LXS");
-            }
-            break;
-        }
-        satno2id(pppobs->sat, satid);
-        trace(3,"signal_sel_ppp %s %s %-18s code=%2d,%2d P=%13.3f,%13.3f L=%13.3f,%13.3f LLI=%d,%d SNR=%6.2f,%6.2f\n",
-            tstr,satid,sattype,pppobs->code[0],pppobs->code[1],pppobs->P[0],pppobs->P[1],pppobs->L[0],pppobs->L[1],
-            pppobs->LLI[0],pppobs->LLI[1],pppobs->SNR[0]*0.001,pppobs->SNR[1]*0.001);
-        pppobs++;
-    }
-}
 /* precise positioning ---------------------------------------------------------
 * input observation data and navigation message, compute rover position by 
 * precise positioning
@@ -1840,7 +1764,6 @@ static void signal_sel_ppp(obsd_t *pppobs, const nav_t *nav, const prcopt_t *opt
 *-----------------------------------------------------------------------------*/
 extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, nav_t *nav)
 {
-    static obsd_t pppobs[MAXOBS];
     prcopt_t *opt=&rtk->opt;
     sol_t solb={{0}};
     gtime_t time;
@@ -1883,10 +1806,8 @@ extern int rtkpos(rtk_t *rtk, const obsd_t *obs, int n, nav_t *nav)
     }
     /* precise point positioning */
     if (opt->mode>=PMODE_PPP_KINEMA) {
-        memcpy(pppobs,obs,sizeof(obsd_t)*nu);
-        signal_sel_ppp(pppobs,nav,opt,nu);
         miono_get_corr(rtk->sol.rr,nav);
-        pppos(rtk,pppobs,nu,nav);
+        pppos(rtk,obs,nu,nav);
         outsolstat(rtk);
         return 1;
     }

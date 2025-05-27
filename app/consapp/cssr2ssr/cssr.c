@@ -1,14 +1,23 @@
 /*------------------------------------------------------------------------------
 * cssr.c : cssr functions
 *
-* Copyright (c) 2024 Cabinet Office, Japan, All rights reserved.
-* Copyright (c) 2022-2024, Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+* Copyright (c) 2024-2025 Cabinet Office, Japan, All rights reserved.
+* Copyright (c) 2022-2025, Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *
 * author  : LHTC
-* history : 2022/02/03 1.0  new
+* history : 2022/02/03 1.0 new
+*           2025/03/18 1.1 support BDS3
+*                          handle not-available-value of cssr
 *
 *-----------------------------------------------------------------------------*/
 #include "cssr.h"
+
+#define CSSR_ORBIT_NOTAVAILABLE   -26.2144
+#define CSSR_CLOCK_NOTAVAILABLE   -26.2144
+#define CSSR_CBIAS_NOTAVAILABLE   -20.48
+#define  SSR_CBIAS_NOTAVAILABLE   -81.92
+#define CSSR_PBIAS_NOTAVAILABLE   -16.384
+#define  SSR_PBIAS_NOTAVAILABLE   -52.4288
 
 static FILE *fp_dump;
 
@@ -106,42 +115,50 @@ static int decode_st1(rtcm_t *rtcm, cssr_t *cssr)
     cssr_mask_t *cssr_mask=&cssr->cssr_mask;
     double udint;
     int i,j,sat,sync,iod,refd=0,minprn;
-    int b,gnssid,nsys,isys,cell_ava,nsat,nsig,isat,isig;
-    int k,idx,sys;
+    int b,gnssid,nsys,cell_ava,nsat,nsig,isat,isig;
+    int k,sys;
     /* signal and tracking mode id (ref []) */
-    const unsigned char codes_gps[16]={
+    const unsigned char codes_gps[CSSR_MAXNSIG]={
         CODE_L1C,CODE_L1P,CODE_L1W,CODE_L1S,CODE_L1L,CODE_L1X,
         CODE_L2S,CODE_L2L,CODE_L2X,CODE_L2P,CODE_L2W,
         CODE_L5I,CODE_L5Q,CODE_L5X,0
     };
-    const unsigned char codes_glo[16]={
+    const unsigned char codes_glo[CSSR_MAXNSIG]={
         CODE_L1C,CODE_L1P,CODE_L2C,CODE_L2P,
         CODE_L4A,CODE_L4B,CODE_L4X,
         CODE_L6A,CODE_L6B,CODE_L6X,
         CODE_L3I,CODE_L3Q,CODE_L3X,0
     };
-    const unsigned char codes_gal[16]={
+    const unsigned char codes_gal[CSSR_MAXNSIG]={
         CODE_L1B,CODE_L1C,CODE_L1X,
         CODE_L5I,CODE_L5Q,CODE_L5X,
         CODE_L7I,CODE_L7Q,CODE_L7X,
         CODE_L8I,CODE_L8Q,CODE_L8X,
-        CODE_L6A,CODE_L6B,0
+        CODE_L6B,CODE_L6C,0
     };
-    const unsigned char codes_bds[16]={
+    const unsigned char codes_bds[CSSR_MAXNSIG]={
         CODE_L2I,CODE_L2Q,CODE_L2X,
         CODE_L6I,CODE_L6Q,CODE_L6X,
         CODE_L7I,CODE_L7Q,CODE_L7X,0
     };
-    const unsigned char codes_qzs[16]={
+    const unsigned char codes_qzs[CSSR_MAXNSIG]={
         CODE_L1C,CODE_L1S,CODE_L1L,CODE_L1X,
         CODE_L2S,CODE_L2L,CODE_L2X,
         CODE_L5I,CODE_L5Q,CODE_L5X,
         CODE_L6I,CODE_L6Q,CODE_L6X,CODE_L1A,0
     };
-    const unsigned char codes_sbs[16]={
+    const unsigned char codes_sbs[CSSR_MAXNSIG]={
         CODE_L1C,
         CODE_L5I,CODE_L5Q,CODE_L5X,0
     };
+    const unsigned char codes_bd3[CSSR_MAXNSIG]={
+        CODE_L2I,CODE_L2X,CODE_L2X,
+        CODE_L6I,CODE_L6Q,CODE_L6X,
+        CODE_L7D,CODE_L7P,CODE_L7Z,
+        CODE_L1D,CODE_L1P,CODE_L1X,
+        CODE_L5D,CODE_L5P,CODE_L5X,0
+    };
+    const unsigned char codes_rsv[CSSR_MAXNSIG]={0};
     const unsigned char *codes;
     cssr_mask_t cssr_mask0={{0}};
     
@@ -162,16 +179,17 @@ static int decode_st1(rtcm_t *rtcm, cssr_t *cssr)
         dump(1,"[%d/%d]GNSSID =%d\n",j,nsys,gnssid);
         
         switch (gnssid) {
-            case 0: sys=SYS_GPS; codes=codes_gps; isys=0; minprn=MINPRNGPS; break;
-            case 1: sys=SYS_GLO; codes=codes_glo; isys=1; minprn=MINPRNGLO; break;
-            case 2: sys=SYS_GAL; codes=codes_gal; isys=2; minprn=MINPRNGAL; break;
-            case 3: sys=SYS_CMP; codes=codes_bds; isys=3; minprn=MINPRNCMP; break;
-            case 4: sys=SYS_QZS; codes=codes_qzs; isys=4; minprn=MINPRNQZS; break;
-            case 5: sys=SYS_SBS; codes=codes_sbs; isys=5; minprn=MINPRNSBS; break;
-            default: return sync?0:20;
+            case 0 : sys=SYS_GPS;  codes=codes_gps; minprn=MINPRNGPS; break;
+            case 1 : sys=SYS_GLO;  codes=codes_glo; minprn=MINPRNGLO; break;
+            case 2 : sys=SYS_GAL;  codes=codes_gal; minprn=MINPRNGAL; break;
+            case 3 : sys=SYS_CMP;  codes=codes_bds; minprn=MINPRNCMP; break;
+            case 4 : sys=SYS_QZS;  codes=codes_qzs; minprn=MINPRNQZS; break;
+            case 5 : sys=SYS_SBS;  codes=codes_sbs; minprn=MINPRNSBS; break;
+            case 7 : sys=SYS_CMP;  codes=codes_bd3; minprn=MINPRNBDS3;break;
+            default: sys=SYS_NONE; codes=codes_rsv; minprn=0;
         }
         
-        cssr_mask->sys[isys]=sys;
+        cssr_mask->sys[gnssid]=sys;
         
         dump(1,"SATMASK=");
         for (k=0;k<40;k++) {
@@ -180,48 +198,46 @@ static int decode_st1(rtcm_t *rtcm, cssr_t *cssr)
             sat=satno(sys,k+minprn);
             if (sat<1||sat>=MAXSAT) continue;
             
-            cssr_mask->sat_mask[isys][sat-1]=b;
-            if (b) cssr_mask->nsat[isys]++;
+            cssr_mask->sat_mask[gnssid][sat-1]=b;
+            if (b) cssr_mask->nsat[gnssid]++;
             dump(1,"%d",b);
         }
         dump(1,"\n");
         
         dump(1,"SIGMASK=");
-        for (k=0;k<16;k++) {
+        for (k=0;k<CSSR_MAXNSIG;k++) {
             b=getbitu(rtcm->buff,i,1); i+=1; /* signal mask */
-            if (b) cssr_mask->nsig[isys]++;
+            if (b) cssr_mask->nsig[gnssid]++;
             dump(1,"%d",b);
             
-            idx=codes[k]-1;
-            if (idx<0) continue;
-            cssr_mask->sig_mask[isys][idx]=b;
-            
+            if (codes[k]<=0) continue;
+            cssr_mask->sig_mask[gnssid][k]=b?codes[k]:0;
         }
         dump(1,"\n");
         
         cell_ava=getbitu(rtcm->buff,i,1); i+=1; /* cell mask availability flag */
         dump(1,"CELLAVA=%d\n",cell_ava);
         
-        cssr_mask->ncell[isys]=cssr_mask->nsat[isys]*cssr_mask->nsig[isys];
-        dump(1,"DEBUG: isys=%d nsat=%d nsig=%d ncell=%d\n",
-            isys,cssr_mask->nsat[isys],cssr_mask->nsig[isys],cssr_mask->ncell[isys]);
+        cssr_mask->ncell[gnssid]=cssr_mask->nsat[gnssid]*cssr_mask->nsig[gnssid];
+        dump(1,"DEBUG: gnssid=%d nsat=%d nsig=%d ncell=%d\n",
+            gnssid,cssr_mask->nsat[gnssid],cssr_mask->nsig[gnssid],cssr_mask->ncell[gnssid]);
         
-        for (k=0;k<cssr_mask->ncell[isys];k++) {
+        for (k=0;k<cssr_mask->ncell[gnssid];k++) {
             if (cell_ava) {
                 b=getbitu(rtcm->buff,i,1); i+=1; /* cell mask */
             }
             else {
                 b=1;
             }
-            cssr_mask->cell_mask[isys][k]=b;
+            cssr_mask->cell_mask[gnssid][k]=b;
         }
         
         dump(1,"CELLMASK=\n");
-        nsat=cssr_mask->nsat[isys];
-        nsig=cssr_mask->nsig[isys];
+        nsat=cssr_mask->nsat[gnssid];
+        nsig=cssr_mask->nsig[gnssid];
         for (isig=0;isig<nsig;isig++) {
             for (isat=0;isat<nsat;isat++) {
-                dump(1,"%d",cssr_mask->cell_mask[isys][isig+nsig*isat]);
+                dump(1,"%d",cssr_mask->cell_mask[gnssid][isig+nsig*isat]);
             }
             dump(1,"\n");
         }
@@ -276,6 +292,12 @@ static int decode_st2(rtcm_t *rtcm, cssr_t *cssr)
             rtcm->ssr[k].iodcrc=iode; 
             rtcm->ssr[k].refd=refd;
             
+            if (deph[0]==CSSR_ORBIT_NOTAVAILABLE||
+                deph[1]==CSSR_ORBIT_NOTAVAILABLE||
+                deph[2]==CSSR_ORBIT_NOTAVAILABLE) {
+                continue;
+            }
+            
             for (l=0;l<3;l++) {
                 rtcm->ssr[k].deph [l]=deph [l];
                 rtcm->ssr[k].ddeph[l]=0.0;
@@ -314,6 +336,8 @@ static int decode_st3(rtcm_t *rtcm, cssr_t *cssr)
             
             dump(3,"[%s] DCLK=%12.4f\n",str,dclk);
             
+            if (dclk==CSSR_CLOCK_NOTAVAILABLE) continue;
+            
             rtcm->ssr[k].t0 [1]=rtcm->time;
             rtcm->ssr[k].udi[1]=udint;
             rtcm->ssr[k].iod[1]=iod;
@@ -331,7 +355,7 @@ static int decode_st4(rtcm_t *rtcm, cssr_t *cssr)
     cssr_mask_t *cssr_mask=&cssr->cssr_mask;
     double udint,bias,cbias[MAXCODE]={0.0};
     int i,j,sync,iod,refd=0,vcbias[MAXCODE]={0};
-    int isat,isig;
+    int isat,isig,code;
     int k,l;
     char str[4];
     
@@ -356,15 +380,17 @@ static int decode_st4(rtcm_t *rtcm, cssr_t *cssr)
             for (l=0;l<MAXCODE;l++) { 
                 cbias[l]=0.0;
                 vcbias[l]=0;
-                if (!cssr_mask->sig_mask[j][l]) continue;
+            }
+            for (l=0;l<CSSR_MAXNSIG;l++) {
+                if (!(code=cssr_mask->sig_mask[j][l])) continue;
                 isig++;
                 
                 if (!cssr_mask->cell_mask[j][isig+cssr_mask->nsig[j]*isat]) continue;
                 
                 bias=getbits(rtcm->buff,i,11)*0.02; i+=11;
-                cbias[l]=bias;
-                vcbias[l]=1; /* 1:output */
-                dump(4," CODE=%s(%2d)",code2obs(l+1),l+1);
+                cbias[code-1]=bias;
+                vcbias[code-1]=1; /* 1:output */
+                dump(4," CODE=%s(%2d)",code2obs(code),l);
                 dump(4," BIAS=%10.2f",bias);
                 
             }
@@ -375,6 +401,9 @@ static int decode_st4(rtcm_t *rtcm, cssr_t *cssr)
             rtcm->ssr[k].udi[4]=udint;
             rtcm->ssr[k].iod[4]=iod;
             for (l=0;l<MAXCODE;l++) {
+                if (cbias[l]==CSSR_CBIAS_NOTAVAILABLE) {
+                    cbias[l]=SSR_CBIAS_NOTAVAILABLE;
+                }
                 rtcm->ssr[k].cbias[l]=(float)cbias[l];
                 rtcm->ssr[k].vcbias[l]=vcbias[l]; /* 1:output */
             }
@@ -389,7 +418,7 @@ static int decode_st5(rtcm_t *rtcm, cssr_t *cssr)
     cssr_mask_t *cssr_mask=&cssr->cssr_mask;
     double udint,bias,pbias[MAXCODE]={0.0};
     int i,j,sync,iod,refd=0,vpbias[MAXCODE]={0},discnt[MAXCODE]={0};
-    int isat,isig;
+    int isat,isig,code;
     int k,l,di;
     char str[4];
     
@@ -415,17 +444,19 @@ static int decode_st5(rtcm_t *rtcm, cssr_t *cssr)
                 pbias[l]=0.0;
                 vpbias[l]=0;
                 discnt[l]=0;
-                if (!cssr_mask->sig_mask[j][l]) continue;
+            }
+            for (l=0;l<CSSR_MAXNSIG;l++) {
+                if (!(code=cssr_mask->sig_mask[j][l])) continue;
                 isig++;
                 
                 if (!cssr_mask->cell_mask[j][isig+cssr_mask->nsig[j]*isat]) continue;
                 
                 bias=getbits(rtcm->buff,i,15)*0.001; i+=15;
                 di  =getbitu(rtcm->buff,i, 2);       i+= 2; /* discontinuity indicator */
-                pbias [l]=bias;
-                discnt[l]=di;
-                vpbias[l]=1; /* 1:output */
-                dump(5," PHASE=%s(%2d)",code2obs(l+1),l+1);
+                pbias [code-1]=bias;
+                discnt[code-1]=di;
+                vpbias[code-1]=1; /* 1:output */
+                dump(5," PHASE=%s(%2d)",code2obs(code),l);
                 dump(5," BIAS=%9.3f DI=%d",bias,di);
                 
             }
@@ -440,6 +471,9 @@ static int decode_st5(rtcm_t *rtcm, cssr_t *cssr)
             rtcm->ssr[k].yaw_rate=0.0; /* (deg/s) */
             
             for (l=0;l<MAXCODE;l++) {
+                if (pbias[l]==CSSR_PBIAS_NOTAVAILABLE) {
+                    pbias[l]=SSR_PBIAS_NOTAVAILABLE;
+                }
                 rtcm->ssr[k].pbias[l]=pbias[l];
                 rtcm->ssr[k].stdpb[l]=0.0;
                 rtcm->ssr[k].vpbias[l]=vpbias[l]; /* 1:output */

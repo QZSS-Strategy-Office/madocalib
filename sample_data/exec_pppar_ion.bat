@@ -8,27 +8,37 @@ setlocal enabledelayedexpansion
 
 set BIN=..\bin\rnx2rtkp.exe
 set CONF=..\app\consapp\rnx2rtkp\gcc_mingw\sample_pppar_iono.conf
-set OBS=.\TSK200JPN_S_20241620000_01D_30S_MO.rnx
-set NAV=.\TSK200JPN_S_20241620000_01D_MN.rnx
-set L6E=.\2024162all.204.l6
-
-rem for Japan and Eastern Australia Region
-set L6D2=.\2024162all.201.l6
-
-rem for Southeast Asia and Western Australia Region
-set L6D1=.\2024162all.200.l6
-set OUT=.\result
+set OBS=.\data\rinex\MIZU00JPN_R_%%Y%%n0000_01D_30S_MO.rnx
+set NAV=.\data\rinex\BRDM00DLR_S_%%Y%%n0000_01D_MN.rnx
+set L6E1=.\data\l6_is-qzss-mdc-004\%%Y\%%n\%%Y%%n%%HU.204.l6
+set L6E2=.\data\l6_is-qzss-mdc-004\%%Y\%%n\%%Y%%n%%HU.206.l6
+set L6D1=.\data\l6_is-qzss-mdc-004\%%Y\%%n\%%Y%%n%%HU.200.l6
+set L6D2=.\data\l6_is-qzss-mdc-004\%%Y\%%n\%%Y%%n%%HU.201.l6
+set ANT=.\data\igs20.atx
+set OUT=.\result_exec_pppar_ion
 
 mkdir %OUT%
 
-for /l %%H in (0,1,23) do (
-    if %%H lss 10 (
-        set "HH=0%%H"
-    ) else (
-        set "HH=%%H"
-    )
+echo.
+echo This is a scenario of PPP-AR with ionospheric correction by MADOCA-PPP
+echo Input RINEX OBS and NAV are at
+echo %OBS%
+echo %NAV%
+echo.
+echo Input L6 messages are in
+echo .\data\l6_is-qzss-mdc-004
+echo.
+
+for /l %%h in (0,1,23) do (
     
-    %BIN% -k %CONF% -ts 2024/06/10 !HH!:00:00 -te 2024/06/10 !HH!:59:30 %OBS% %NAV% %L6E% -mdciono %L6D1% -mdciono %L6D2% -o %OUT%\pppar_ion_20240610!HH!.pos -x 2
+    %BIN% -ts 2025/04/01 %%h:00:00 -te 2025/04/01 %%h:59:30 -ti 30 -k %CONF% -o %OUT%\%%Y%%m%%d%%h%%M%%S.pos -ant %ANT% %OBS% %NAV% %L6E1% %L6E2% %L6D1% %L6D2%
     
 )
+echo Output files (*.pos) were stored in the following folder
+echo %OUT%
+echo.
+echo The output files can be visualized by rtkplot.exe in the same folder.
+echo  - Double-click rtkplot.exe to start it.
+echo  - Drag and drop selected *.pos files into rtkplot panel.
+echo.
 pause

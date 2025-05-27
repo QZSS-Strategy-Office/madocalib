@@ -1,8 +1,8 @@
 /*------------------------------------------------------------------------------
 * rnx2rtkp.c : read rinex obs/nav files and compute receiver positions
 *
-*          Copyright (C) 2024 Cabinet Office, Japan, All rights reserved.
-*          Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+*          Copyright (C) 2024-2025 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024-2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2007-2016 by T.TAKASU, All rights reserved.
 *
 * version : $Revision: 1.1 $ $Date: 2008/07/17 21:55:16 $
@@ -22,6 +22,7 @@
 *                            add option -mdciono
 *           2024/09/27  1.12 -mdciono option can be specified up to three.
 *                            add option -ant
+*           2025/03/18  1.13 hundle signal options.
 *-----------------------------------------------------------------------------*/
 #include <stdarg.h>
 #include "rtklib.h"
@@ -77,8 +78,9 @@ static const char *help[]={
 "           rover latitude/longitude/height for fixed or ppp-fixed mode",
 " -y level  output soltion status (0:off,1:states,2:residuals) [0]",
 " -x level  debug trace level (0:off) [0]",
-" -mdciono file[ -mdciono file[ -mdciono file]] input MADOCA-PPP L6D archive file. max 3 files [none]",
-" -ant file satantfile and rcvantfile [specified by conf file]"
+" -mdciono  file[ -mdciono file[ -mdciono file]] input MADOCA-PPP L6D archive file. max 3 files [none]",
+" -ionocorr apply ionospheric correction by MADOCA-PPP L6D [specified by conf file]",
+" -ant file rcvantfile [specified by conf file]"
 };
 /* show message --------------------------------------------------------------*/
 extern int showmsg(const char *format, ...)
@@ -109,6 +111,23 @@ int main(int argc, char **argv)
     int i,j,n,ret,ni=0;
     char *infile[MAXFILE],*outfile="",*p;
     
+    const int freq_nums_l1l2  [MAXFREQ]={1,2,0,0,0};
+    const int freq_nums_l1l5  [MAXFREQ]={1,5,0,0,0};
+    const int freq_nums_l1l2l5[MAXFREQ]={1,2,5,0,0};
+    const int freq_nums_l1l5l2[MAXFREQ]={1,5,2,0,0};
+    
+    const int freq_nums_e1e5a  [MAXFREQ]={1,5,0,0,0};
+    const int freq_nums_e1e5b  [MAXFREQ]={1,7,0,0,0};
+    const int freq_nums_e1e6   [MAXFREQ]={1,6,0,0,0};
+    const int freq_nums_e1e5ae5be6[MAXFREQ]={1,5,7,6,0};
+    const int freq_nums_e1e5ae6e5b[MAXFREQ]={1,5,6,7,0};
+    
+    const int freq_nums_b1b3   [MAXFREQ]={2,6,0,0,0};
+    const int freq_nums_b1b2i  [MAXFREQ]={2,7,0,0,0};
+    const int freq_nums_b1b2a  [MAXFREQ]={2,5,0,0,0};
+    const int freq_nums_b1b3b2i[MAXFREQ]={2,6,7,0,0};
+    const int freq_nums_b1b3b2a[MAXFREQ]={2,6,5,0,0};
+    
     prcopt.mode  =PMODE_KINEMA;
     prcopt.navsys=0;
     prcopt.refpos=1;
@@ -117,6 +136,12 @@ int main(int argc, char **argv)
     solopt.timef=0;
     sprintf(solopt.prog ,"%s ver.%s %s",PROGNAME,VER_RTKLIB,PATCH_LEVEL);
     sprintf(filopt.trace,"%s.trace",PROGNAME);
+    
+    prcopt.pppsig[0]=2;
+    prcopt.pppsig[1]=2;
+    prcopt.pppsig[2]=3;
+    prcopt.pppsig[3]=2;
+    prcopt.pppsig[4]=2;
     
     /* load options from configuration file */
     for (i=1;i<argc;i++) {
@@ -188,22 +213,60 @@ int main(int argc, char **argv)
                 return -2;
             }
         }
+        else if (!strcmp(argv[i],"-ionocorr")) prcopt.ionocorr=1;
         else if (!strcmp(argv[i],"-ant")&&i+1<argc) {
-            strncpy(filopt.satantp,argv[++i],sizeof(filopt.satantp)-1);
-            strncpy(filopt.rcvantp,argv[  i],sizeof(filopt.rcvantp)-1);
+            strncpy(filopt.rcvantp,argv[++i],sizeof(filopt.rcvantp)-1);
+            filopt.satantp[0]='\0';
         }
         else if (!strcmp(argv[i],"-y")&&i+1<argc) solopt.sstat=atoi(argv[++i]);
         else if (!strcmp(argv[i],"-x")&&i+1<argc) solopt.trace=atoi(argv[++i]);
+        else if (!strcmp(argv[i],"-pppopt")&&i+1<argc) {
+            sprintf(prcopt.pppopt,"%s",argv[++i]);
+        }
         else if (*argv[i]=='-') printhelp();
         else if (n<MAXFILE) infile[n++]=argv[i];
-    }
-    if (!prcopt.navsys) {
-        prcopt.navsys=SYS_GPS|SYS_GLO;
     }
     if (n<=0) {
         showmsg("error : no input file");
         return -2;
     }
+    if (!prcopt.navsys) {
+        prcopt.navsys=SYS_GPS|SYS_GLO|SYS_QZS|SYS_GAL;
+    }
+    if (prcopt.ionocorr) {
+        prcopt.ionoopt=IONOOPT_EST;
+    }
+    if (prcopt.modear>=ARMODE_CONT) {
+        prcopt.ionoopt=IONOOPT_EST;
+    }
+    switch (prcopt.pppsig[0]) {
+        case 0: set_obsdef(SYS_GPS,freq_nums_l1l2  ); break;
+        case 1: set_obsdef(SYS_GPS,freq_nums_l1l5  ); break;
+        case 2: set_obsdef(SYS_GPS,freq_nums_l1l2l5); break;
+    }
+    switch (prcopt.pppsig[1]) {
+        case 0: set_obsdef(SYS_QZS,freq_nums_l1l5  ); break;
+        case 1: set_obsdef(SYS_QZS,freq_nums_l1l2  ); break;
+        case 2: set_obsdef(SYS_QZS,freq_nums_l1l5l2); break;
+    }
+    switch (prcopt.pppsig[2]) {
+        case 0: set_obsdef(SYS_GAL,freq_nums_e1e5a   ); break;
+        case 1: set_obsdef(SYS_GAL,freq_nums_e1e5b   ); break;
+        case 2: set_obsdef(SYS_GAL,freq_nums_e1e6    ); break;
+        case 3: set_obsdef(SYS_GAL,freq_nums_e1e5ae5be6); break;
+        case 4: set_obsdef(SYS_GAL,freq_nums_e1e5ae6e5b); break;
+    }
+    switch (prcopt.pppsig[3]) {
+        case 0: set_obsdef(SYS_BD2,freq_nums_b1b3   ); break;
+        case 1: set_obsdef(SYS_BD2,freq_nums_b1b2i  ); break;
+        case 2: set_obsdef(SYS_BD2,freq_nums_b1b3b2i); break;
+    }
+    switch (prcopt.pppsig[4]) {
+        case 0: set_obsdef(SYS_CMP,freq_nums_b1b3   ); break;
+        case 1: set_obsdef(SYS_CMP,freq_nums_b1b2a  ); break;
+        case 2: set_obsdef(SYS_CMP,freq_nums_b1b3b2a); break;
+    }
+    
     ret=postpos(ts,te,tint,0.0,&prcopt,&solopt,&filopt,infile,n,outfile,"","");
     
     if (!ret) fprintf(stderr,"%40s\r","");

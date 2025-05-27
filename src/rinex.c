@@ -2,6 +2,7 @@
 * rinex.c : RINEX functions
 *
 *          Copyright (C) 2007-2020 by T.TAKASU, All rights reserved.
+*          Copyright (C) 2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *
 * reference :
 *     [1] W.Gurtner and L.Estey, RINEX The Receiver Independent Exchange Format
@@ -116,6 +117,9 @@
 *                           use API code2idx() to get frequency index
 *                           use intger types in stdint.h
 *                           suppress warnings
+*           2025/01/06 1.31 store observation data at different frequencies for
+*                            BDS2 and BDS3.
+*                           use code2freq_idx() instead of code2idx().
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -124,7 +128,7 @@
 #define SQR(x)      ((x)*(x))
 
 #define NAVEXP      "D"                 /* exponent letter in RINEX NAV */
-#define NUMSYS      7                   /* number of systems */
+#define NUMSYS      8                   /* number of systems */
 #define MAXRNXLEN   (16*MAXOBSTYPE+4)   /* max RINEX record length */
 #define MAXPOSHEAD  1024                /* max head line position */
 #define MINFREQ_GLO -7                  /* min frequency number GLONASS */
@@ -766,13 +770,14 @@ static int decode_obsdata(FILE *fp, char *buff, double ver, int mask,
         stat=0;
     }
     /* read observation data fields */
-    switch (satsys(obs->sat,NULL)) {
+    switch (satsys_bd2(obs->sat,NULL)) {
         case SYS_GLO: ind=index+1; break;
         case SYS_GAL: ind=index+2; break;
         case SYS_QZS: ind=index+3; break;
         case SYS_SBS: ind=index+4; break;
         case SYS_CMP: ind=index+5; break;
-        case SYS_IRN: ind=index+6; break;
+        case SYS_BD2: ind=index+6; break;
+        case SYS_IRN: ind=index+7; break;
         default:      ind=index  ; break;
     }
     for (i=0,j=ver<=2.99?0:3;i<ind->n;i++,j+=16) {
@@ -918,7 +923,7 @@ static void set_index(double ver, int sys, const char *opt,
     for (i=n=0;*tobs[i];i++,n++) {
         ind->code[i]=obs2code(tobs[i]+1);
         ind->type[i]=(p=strchr(obscodes,tobs[i][0]))?(int)(p-obscodes):0;
-        ind->idx[i]=code2idx(sys,ind->code[i]);
+        ind->idx[i]=code2freq_idx(sys,ind->code[i]);
         ind->pri[i]=getcodepri(sys,ind->code[i],opt);
         ind->pos[i]=-1;
     }
@@ -930,6 +935,7 @@ static void set_index(double ver, int sys, const char *opt,
         case SYS_QZS: optstr="-JL%2s=%lf"; break;
         case SYS_SBS: optstr="-SL%2s=%lf"; break;
         case SYS_CMP: optstr="-CL%2s=%lf"; break;
+        case SYS_BD2: optstr="-CL%2s=%lf"; break;
         case SYS_IRN: optstr="-IL%2s=%lf"; break;
     }
     for (p=opt;p&&(p=strchr(p,'-'));p++) {
@@ -999,7 +1005,8 @@ static int readrnxobsb(FILE *fp, const char *opt, double ver, int *tsys,
     if (nsys>=4) set_index(ver,SYS_QZS,opt,tobs[3],index+3);
     if (nsys>=5) set_index(ver,SYS_SBS,opt,tobs[4],index+4);
     if (nsys>=6) set_index(ver,SYS_CMP,opt,tobs[5],index+5);
-    if (nsys>=7) set_index(ver,SYS_IRN,opt,tobs[6],index+6);
+    if (nsys>=7) set_index(ver,SYS_BD2,opt,tobs[5],index+6);
+    if (nsys>=8) set_index(ver,SYS_IRN,opt,tobs[6],index+7);
     
     /* read record */
     while (fgets(buff,MAXRNXLEN,fp)) {

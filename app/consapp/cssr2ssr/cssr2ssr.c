@@ -1,11 +1,12 @@
 /*------------------------------------------------------------------------------
 * cssr2ssr : convert cssr message file to ssr message file
 *
-* Copyright (c) 2024 Cabinet Office, Japan, All rights reserved.
-* Copyright (c) 2022-2024, Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+* Copyright (c) 2024-2025 Cabinet Office, Japan, All rights reserved.
+* Copyright (c) 2022-2025, Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *
 * author  : LHTC
 * history : 2022/02/03 1.0  new
+*           2025/03/18 1.1 use CSSR_MAXNSIG instead of MAXCODE
 *
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
@@ -94,7 +95,7 @@ static int get_sizeof_subtype_ncell(cssr_t *cssr, int nb)
         for (k=0;k<MAXSAT;k++) {
             if (!cssr_mask->sat_mask[i][k]) continue;
             isig=-1;
-            for (l=0;l<MAXCODE;l++) {
+            for (l=0;l<CSSR_MAXNSIG;l++) {
                 if (!cssr_mask->sig_mask[i][l]) continue;
                 isig++;
                 if (!cssr_mask->cell_mask[i][isig+cssr_mask->nsig[i]*isat]) continue;
@@ -533,6 +534,7 @@ static int cssr2ssr(const char *ifile, const char *ofile, gtime_t time)
 *           1063,    1064,      1065,       1266,   1067 : GLONASS
 *           1240,    1241,      1242,       1267,   1244 : Galileo
 *           1246,    1247,      1248,       1268,   1250 : QZSS
+*           1258,    1259,      1260,       1270,   1262 : BeiDou
 *
 *  options:
 *    -td y/m/d      date for message time (y=year,m=month,d=day)

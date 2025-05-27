@@ -1,12 +1,12 @@
 # makefile for MADOCALIB rnx2rtkp.exe
-# Rev.2024/07/01
+# Rev.2025/04/16
 
 BINDIR  = ..\..\..\..\bin
 SRC     = ..\..\..\..\src
 
 CC      = gcc
 OPTS    = -DTRACE -DENAGLO -DENAQZS -DENAGAL -DENACMP -DENAIRN -DNFREQ=5 -DNEXOBS=5 -DWIN32
-CFLAGS  = -Wall -O3 -ansi -pedantic -Wno-unused-but-set-variable -I$(SRC) $(OPTS) -g
+CFLAGS  = -Wall -O3 -ansi -pedantic -Wno-unused-but-set-variable -Wno-stringop-truncation -I$(SRC) $(OPTS) -g
 LDLIBS  = -lwinmm
 OBJS    = rnx2rtkp.o rtkcmn.o rinex.o rtkpos.o postpos.o solution.o lambda.o geoid.o sbas.o preceph.o pntpos.o ephemeris.o options.o ppp.o ppp_ar.o ppp_iono.o rtcm.o rtcm2.o rtcm3.o rtcm3e.o ionex.o tides.o mdccssr.o mdciono.o
 

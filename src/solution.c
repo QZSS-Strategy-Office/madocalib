@@ -1,7 +1,8 @@
 /*------------------------------------------------------------------------------
 * solution.c : solution functions
 *
-*          Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2023-2025 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2007-2020 by T.TAKASU, All rights reserved.
 *
 * references :
@@ -57,6 +58,7 @@
 *           2023/01/06  1.19 branch from ver.2.4.3b34 for MADOCALIB
 *           2024/01/10  1.20 add arsys to solution
 *           2024/03/15  1.21 delete amb glo from solution
+*                            add processing signal option to solution
 *-----------------------------------------------------------------------------*/
 #include <ctype.h>
 #include "rtklib.h"
@@ -1436,55 +1438,81 @@ extern int outprcopts(uint8_t *buff, const prcopt_t *opt)
     const char *s8[]={
         "OFF","Continuous","Instantaneous","Fix and Hold","","",""
     };
+#if 0    
     const char *s9[]={
         "OFF","ON","","",""
     };
+#endif    
+    const char *s10[]={
+        "L1/L2","L1/L5","L1/L2/L5","",""
+    };
+    const char *s11[]={
+        "L1/L5","L1/L2","L1/L5/L2","",""
+    };
+    const char *s12[]={
+        "E1/E5a","E1/E5b","E1/E6","E1/E5a/E5b/E6","E1/E5a/E6/E5b",""
+    };
+    const char *s13[]={
+        "B1I/B3I","B1I/B2I","B1I/B3I/B2I","",""
+    };
+    const char *s14[]={
+        "B1I/B3I","B1I/B2a","B1I/B3I/B2a","","",""
+    };
+    
     int i;
     char *p=(char *)buff;
     
     trace(3,"outprcopts:\n");
     
-    p+=sprintf(p,"%s pos mode  : %s\r\n",COMMENTH,s1[opt->mode]);
+    p+=sprintf(p,"%s pos mode   : %s\r\n",COMMENTH,s1[opt->mode]);
     
     if (PMODE_DGPS<=opt->mode&&opt->mode<=PMODE_PPP_FIXED) {
-        p+=sprintf(p,"%s freqs     : %s\r\n",COMMENTH,s2[opt->nf-1]);
+        p+=sprintf(p,"%s freqs      : %s\r\n",COMMENTH,s2[opt->nf-1]);
+        
+        p+=sprintf(p,"%s siggps     : %s\r\n",COMMENTH,s10[opt->pppsig[0]]);
+        p+=sprintf(p,"%s sigqzs     : %s\r\n",COMMENTH,s11[opt->pppsig[1]]);
+        p+=sprintf(p,"%s siggal     : %s\r\n",COMMENTH,s12[opt->pppsig[2]]);
+        p+=sprintf(p,"%s sigbds2    : %s\r\n",COMMENTH,s13[opt->pppsig[3]]);
+        p+=sprintf(p,"%s sigbds3    : %s\r\n",COMMENTH,s14[opt->pppsig[4]]);
     }
     if (opt->mode>PMODE_SINGLE) {
-        p+=sprintf(p,"%s solution  : %s\r\n",COMMENTH,s3[opt->soltype]);
+        p+=sprintf(p,"%s solution   : %s\r\n",COMMENTH,s3[opt->soltype]);
     }
-    p+=sprintf(p,"%s elev mask : %.1f deg\r\n",COMMENTH,opt->elmin*R2D);
+    p+=sprintf(p,"%s elev mask  : %.1f deg\r\n",COMMENTH,opt->elmin*R2D);
     if (opt->mode>PMODE_SINGLE) {
-        p+=sprintf(p,"%s dynamics  : %s\r\n",COMMENTH,opt->dynamics?"on":"off");
-        p+=sprintf(p,"%s tidecorr  : %s\r\n",COMMENTH,opt->tidecorr?"on":"off");
+        p+=sprintf(p,"%s dynamics   : %s\r\n",COMMENTH,opt->dynamics?"on":"off");
+        p+=sprintf(p,"%s tidecorr   : %s\r\n",COMMENTH,opt->tidecorr?"on":"off");
     }
     if (opt->mode<=PMODE_PPP_FIXED) {
-        p+=sprintf(p,"%s ionos opt : %s\r\n",COMMENTH,s4[opt->ionoopt]);
+        p+=sprintf(p,"%s ionos opt  : %s\r\n",COMMENTH,s4[opt->ionoopt]);
     }
-    p+=sprintf(p,"%s tropo opt : %s\r\n",COMMENTH,s5[opt->tropopt]);
-    p+=sprintf(p,"%s ephemeris : %s\r\n",COMMENTH,s6[opt->sateph]);
-    p+=sprintf(p,"%s navi sys  :",COMMENTH);
+    p+=sprintf(p,"%s tropo opt  : %s\r\n",COMMENTH,s5[opt->tropopt]);
+    p+=sprintf(p,"%s ephemeris  : %s\r\n",COMMENTH,s6[opt->sateph]);
+    p+=sprintf(p,"%s navi sys   :",COMMENTH);
     for (i=0;sys[i];i++) {
         if (opt->navsys&sys[i]) p+=sprintf(p," %s",s7[i]);
     }
     p+=sprintf(p,"\r\n");
-    p+=sprintf(p,"%s ar sys    :",COMMENTH);
-    for (i=0;sys[i];i++) {
-        if (opt->arsys&sys[i]) p+=sprintf(p," %s",s7[i]);
-    }
-    p+=sprintf(p,"\r\n");
     if (PMODE_KINEMA<=opt->mode&&opt->mode<=PMODE_PPP_FIXED) {
-        p+=sprintf(p,"%s amb res   : %s\r\n",COMMENTH,s8[opt->modear]);
+        p+=sprintf(p,"%s amb mode   : %s\r\n",COMMENTH,s8[opt->modear]);
+        p+=sprintf(p,"%s ar sys     :",COMMENTH);
+        for (i=0;sys[i];i++) {
+            if (opt->arsys&sys[i]) p+=sprintf(p," %s",s7[i]);
+        }
+        p+=sprintf(p,"\r\n");
         if (opt->thresar[0]>0.0) {
-            p+=sprintf(p,"%s val thres : %.1f\r\n",COMMENTH,opt->thresar[0]);
+            p+=sprintf(p,"%s val ratio  : %.1f\r\n",COMMENTH,opt->thresar[0]);
+            p+=sprintf(p,"%s max std pos: %.1f m\r\n",COMMENTH,opt->thresar[1]);
         }
     }
     if (opt->mode==PMODE_MOVEB&&opt->baseline[0]>0.0) {
-        p+=sprintf(p,"%s baseline  : %.4f %.4f m\r\n",COMMENTH,
+        p+=sprintf(p,"%s baseline   : %.4f %.4f m\r\n",COMMENTH,
                    opt->baseline[0],opt->baseline[1]);
     }
+    p+=sprintf(p,"%s ionocorr   : %s\r\n",COMMENTH,opt->ionocorr?"on":"off");
     for (i=0;i<2;i++) {
         if (opt->mode==PMODE_SINGLE||(i>=1&&opt->mode>PMODE_FIXED)) continue;
-        p+=sprintf(p,"%s antenna%d  : %-21s (%7.4f %7.4f %7.4f)\r\n",COMMENTH,
+        p+=sprintf(p,"%s antenna%d   : %-21s (%7.4f %7.4f %7.4f)\r\n",COMMENTH,
                    i+1,opt->anttype[i],opt->antdel[i][0],opt->antdel[i][1],
                    opt->antdel[i][2]);
     }

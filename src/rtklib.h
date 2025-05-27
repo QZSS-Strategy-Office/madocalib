@@ -1,8 +1,8 @@
 /*------------------------------------------------------------------------------
 * rtklib.h : RTKLIB constants, types and function prototypes
 *
-*          Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
-*          Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+*          Copyright (C) 2023-2025 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024-2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2007-2020 by T.TAKASU, All rights reserved.
 *
 * options : -DENAGLO   enable GLONASS
@@ -35,7 +35,7 @@
 *           2024/06/17 1.15 VER_MADOCALIB 1.2
 *           2024/07/23 1.16 VER_MADOCALIB 1.3
 *           2024/09/27 1.17 VER_MADOCALIB 1.4
-*           2025/05/20 1.18 VER_MADOCALIB 1.5
+*           2025/01/06 1.18 VER_MADOCALIB 2.0
 *-----------------------------------------------------------------------------*/
 #ifndef RTKLIB_H
 #define RTKLIB_H
@@ -67,7 +67,7 @@ extern "C" {
 /* constants -----------------------------------------------------------------*/
 
 #define VER_RTKLIB  "2.4.3"             /* library version */
-#define VER_MADOCALIB "1.5"
+#define VER_MADOCALIB "2.0"
 
 #define PATCH_LEVEL "b34"               /* patch level */
 
@@ -117,16 +117,17 @@ extern "C" {
 #define EFACT_IRN   1.5                 /* error factor: IRNSS */
 #define EFACT_SBS   3.0                 /* error factor: SBAS */
 
-#define SYS_NONE    0x00                /* navigation system: none */
-#define SYS_GPS     0x01                /* navigation system: GPS */
-#define SYS_SBS     0x02                /* navigation system: SBAS */
-#define SYS_GLO     0x04                /* navigation system: GLONASS */
-#define SYS_GAL     0x08                /* navigation system: Galileo */
-#define SYS_QZS     0x10                /* navigation system: QZSS */
-#define SYS_CMP     0x20                /* navigation system: BeiDou */
-#define SYS_IRN     0x40                /* navigation system: IRNS */
-#define SYS_LEO     0x80                /* navigation system: LEO */
-#define SYS_ALL     0xFF                /* navigation system: all */
+#define SYS_NONE    0x000                /* navigation system: none */
+#define SYS_GPS     0x001                /* navigation system: GPS */
+#define SYS_SBS     0x002                /* navigation system: SBAS */
+#define SYS_GLO     0x004                /* navigation system: GLONASS */
+#define SYS_GAL     0x008                /* navigation system: Galileo */
+#define SYS_QZS     0x010                /* navigation system: QZSS */
+#define SYS_CMP     0x020                /* navigation system: BeiDou */
+#define SYS_IRN     0x040                /* navigation system: IRNS */
+#define SYS_LEO     0x080                /* navigation system: LEO */
+#define SYS_BD2     0x100                /* navigation system: BeiDou-2 */
+#define SYS_ALL     0xFFF                /* navigation system: all */
 
 #define TSYS_GPS    0                   /* time system: GPS time */
 #define TSYS_UTC    1                   /* time system: UTC */
@@ -140,6 +141,7 @@ extern "C" {
 #define NFREQ       3                   /* number of carrier frequencies */
 #endif
 #define NFREQGLO    2                   /* number of carrier frequencies of GLONASS */
+#define NFREQPCV    12                  /* number of carrier frequencies for pcv_t */
 
 #ifndef NEXOBS
 #define NEXOBS      0                   /* number of extended obs codes */
@@ -194,11 +196,13 @@ extern "C" {
 #define MAXPRNCMP   63                  /* max satellite sat number of BeiDou */
 #define NSATCMP     (MAXPRNCMP-MINPRNCMP+1) /* number of BeiDou satellites */
 #define NSYSCMP     1
+#define MINPRNBDS3  19                  /* min satellite sat number of BeiDou-3 */
 #else
 #define MINPRNCMP   0
 #define MAXPRNCMP   0
 #define NSATCMP     0
 #define NSYSCMP     0
+#define MINPRNBDS3  0
 #endif
 #ifdef ENAIRN
 #define MINPRNIRN   1                   /* min satellite sat number of IRNSS */
@@ -287,13 +291,6 @@ extern "C" {
 #define OBSTYPE_SNR 0x08                /* observation type: SNR */
 #define OBSTYPE_ALL 0xFF                /* observation type: all */
 
-#define FREQTYPE_L1 0x01                /* frequency type: L1/E1/B1 */
-#define FREQTYPE_L2 0x02                /* frequency type: L2/E5b/B2 */
-#define FREQTYPE_L3 0x04                /* frequency type: L5/E5a/L3 */
-#define FREQTYPE_L4 0x08                /* frequency type: L6/E6/B3 */
-#define FREQTYPE_L5 0x10                /* frequency type: E5ab */
-#define FREQTYPE_ALL 0xFF               /* frequency type: all */
-
 #define CODE_NONE   0                   /* obs code: none or unknown */
 #define CODE_L1C    1                   /* obs code: L1C/A,G1C/A,E1C (GPS,GLO,GAL,QZS,SBS) */
 #define CODE_L1P    2                   /* obs code: L1P,G1P,B1P (GPS,GLO,BDS) */
@@ -303,7 +300,7 @@ extern "C" {
 #define CODE_L1N    6                   /* obs code: L1codeless,B1codeless (GPS,BDS) */
 #define CODE_L1S    7                   /* obs code: L1C(D)     (GPS,QZS) */
 #define CODE_L1L    8                   /* obs code: L1C(P)     (GPS,QZS) */
-#define CODE_L1E    9                   /* (not used) */
+#define CODE_L1E    9                   /* obs code: L1C/B      (QZS) */
 #define CODE_L1A    10                  /* obs code: E1A,B1A    (GAL,BDS) */
 #define CODE_L1B    11                  /* obs code: E1B        (GAL) */
 #define CODE_L1X    12                  /* obs code: E1B+C,L1C(D+P),B1D+P (GAL,QZS,BDS) */
@@ -525,6 +522,8 @@ extern "C" {
 #define MIONO_MAX_AGE    300.0          /* max age of STEC corr.(s)        (Table 6.3.2-3) */
 #define MIONO_MAX_PRN    (2+1)          /* Max defined MADOCA-PPP L6D signal (Table 3-1) + 1 (reserved) */
 
+#define SSR_INVALID_CBIAS  -81.92       /* invalid value of ssr code bias (m) */
+#define SSR_INVALID_PBIAS  -52.4288     /* invalid value of ssr phase bias (m) */
     
 #ifdef WIN32
 #define thread_t    HANDLE
@@ -583,8 +582,8 @@ typedef struct {        /* antenna parameter type */
     char type[MAXANT];  /* antenna type */
     char code[MAXANT];  /* serial number or satellite code */
     gtime_t ts,te;      /* valid time start and end */
-    double off[NFREQ][ 3]; /* phase center offset e/n/u or x/y/z (m) */
-    double var[NFREQ][19]; /* phase center variation (m) */
+    double off[NFREQPCV][ 3]; /* phase center offset e/n/u or x/y/z (m) */
+    double var[NFREQPCV][19]; /* phase center variation (m) */
                         /* el=90,85,...,0 or nadir=0,1,2,3,... (deg) */
 } pcv_t;
 
@@ -906,7 +905,7 @@ typedef struct {        /* solution type */
                         /* {c_xx,c_yy,c_zz,c_xy,c_yz,c_zx} or */
                         /* {c_ee,c_nn,c_uu,c_en,c_nu,c_ue} */
     float  qv[6];       /* velocity variance/covariance (m^2/s^2) */
-    double dtr[6];      /* receiver clock bias to time systems (s) */
+    double dtr[NSYS+1]; /* receiver clock bias to time systems (s) */
     uint8_t type;       /* type (0:xyz-ecef,1:enu-baseline) */
     uint8_t stat;       /* solution status (SOLQ_???) */
     uint8_t ns;         /* number of valid satellites */
@@ -1058,7 +1057,7 @@ typedef struct {        /* processing options type */
                         /* [1-3]:error factor a/b/c of phase (m) */
                         /* [4]:doppler frequency (hz) */
     double std[3];      /* initial-state std [0]bias,[1]iono [2]trop */
-    double prn[7];      /* process-noise std [0]bias,[1]iono [2]trop [3]acch [4]accv [5]pos */
+    double prn[7];      /* process-noise std [0]bias,[1]iono [2]trop [3]acch [4]accv [5]pos [6]dcb */
     double sclkstab;    /* satellite clock stability (sec/sec) */
     double thresar[8];  /* AR validation threshold */
     double elmaskar;    /* elevation mask of AR for rising satellite (deg) */
@@ -1084,7 +1083,7 @@ typedef struct {        /* processing options type */
     int  freqopt;       /* disable L2-AR */
     char pppopt[256];   /* ppp option */
     char rtcmopt[256];  /* rtcm options */
-    int  pppsig[4];     /* signal selection [0]GPS IIR-M,[1]GPS IIF,[2]GPS IIIA,[3]QZS-1/2 */
+    int  pppsig[5];     /* signal selection [0]GPS,[1]QZS,[2]GAL,[3]BDS2,[4]BDS3 */
     char *l6dpath[MIONO_MAX_PRN]; /* MADOCA-PPP ionospheric correction L6D file path */
 } prcopt_t;
 
@@ -1172,21 +1171,22 @@ typedef struct {        /* satellite status type */
     double azel[2];     /* azimuth/elevation angles {az,el} (rad) */
     double resp[NFREQ]; /* residuals of pseudorange (m) */
     double resc[NFREQ]; /* residuals of carrier-phase (m) */
-    uint8_t vsat[NFREQ]; /* valid satellite flag */
-    uint16_t snr[NFREQ]; /* signal strength (*SNR_UNIT dBHz) */
-    uint8_t fix [NFREQ]; /* ambiguity fix flag (1:fix,2:float,3:hold) */
-    uint8_t slip[NFREQ]; /* cycle-slip flag */
-    uint8_t half[NFREQ]; /* half-cycle valid flag */
+    uint8_t vsat[NFREQ];/* valid satellite flag */
+    uint16_t snr[NFREQ];/* signal strength (*SNR_UNIT dBHz) */
+    uint8_t fix [NFREQ];/* ambiguity fix flag (1:fix,2:float,3:hold) */
+    uint8_t slip[NFREQ];/* cycle-slip flag */
+    uint8_t half[NFREQ];/* half-cycle valid flag */
     int lock [NFREQ];   /* lock counter of phase */
     uint32_t outc [NFREQ]; /* obs outage counter of phase */
     uint32_t slipc[NFREQ]; /* cycle-slip counter */
     uint32_t rejc [NFREQ]; /* reject counter */
-    double gf[NFREQ-1]; /* geometry-free phase (m) */
-    double mw[NFREQ-1]; /* MW-LC (m) */
+    double gf[NFREQ];   /* geometry-free phase (m) */
+    double mw[NFREQ];   /* MW-LC (m) */
     double phw;         /* phase windup (cycle) */
     gtime_t pt[2][NFREQ]; /* previous carrier-phase time */
     double ph[2][NFREQ]; /* previous carrier-phase observable (cycle) */
     int discont[NFREQ];  /* discontinuity counter of ssr phase bias */
+    double ionc;        /* ionosperic delay by carrier phase (m) */
 } ssat_t;
 
 typedef struct {        /* ambiguity control type */
@@ -1379,16 +1379,23 @@ extern opt_t sysopts[];              /* system options table */
 /* satellites, systems, codes functions --------------------------------------*/
 EXPORT int  satno   (int sys, int prn);
 EXPORT int  satsys  (int sat, int *prn);
+EXPORT int  satsys_bd2(int sat, int *prn);
 EXPORT int  satid2no(const char *id);
 EXPORT void satno2id(int sat, char *id);
-EXPORT uint8_t obs2code(const char *obs);
-EXPORT char *code2obs(uint8_t code);
-EXPORT double code2freq(int sys, uint8_t code, int fcn);
-EXPORT double sat2freq(int sat, uint8_t code, const nav_t *nav);
-EXPORT int  code2idx(int sys, uint8_t code);
 EXPORT int  satexclude(int sat, double var, int svh, const prcopt_t *opt);
 EXPORT int  testsnr(int base, int freq, double el, double snr,
                     const snrmask_t *mask);
+EXPORT uint8_t obs2code(const char *obs);
+EXPORT char *code2obs(uint8_t code);
+EXPORT int code2freq_num(unsigned char code);
+EXPORT int freq_idx2freq_num(int sys, int freq_idx);
+EXPORT int freq_num2freq_idx(int sys, int freq_num);
+EXPORT double freq_num2freq(int sys, int freq_num, int fcn);
+EXPORT int code2freq_idx(int sys, uint8_t code);
+EXPORT double code2freq(int sys, uint8_t code, int fcn);
+EXPORT double sat2freq(int sat, uint8_t code, const nav_t *nav);
+EXPORT void set_obsdef(int sys, const int *freq_nums);
+EXPORT void get_obsdef(int sys, int *freq_nums, double *freq_hz, char codepris[MAXFREQ][16]);
 EXPORT void setcodepri(int sys, int idx, const char *pri);
 EXPORT int  getcodepri(int sys, uint8_t code, const char *opt);
 
@@ -1523,6 +1530,8 @@ EXPORT int tropcorr(gtime_t time, const nav_t *nav, const double *pos,
                     const double *azel, int tropopt, double *trp, double *var);
 
 /* antenna models ------------------------------------------------------------*/
+EXPORT int freq_num2ant_idx(int sys, int freq_num);
+EXPORT int freq_idx2ant_idx(int sys, int freq_idx);
 EXPORT int  readpcv(const char *file, pcvs_t *pcvs);
 EXPORT pcv_t *searchpcv(int sat, const char *type, gtime_t time,
                         const pcvs_t *pcvs);

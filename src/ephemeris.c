@@ -1,7 +1,8 @@
 /*------------------------------------------------------------------------------
 * ephemeris.c : satellite ephemeris and clock functions
 *
-*          Copyright (C) 2024 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024-2025 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2010-2020 by T.TAKASU, All rights reserved.
 *
 * references :
@@ -74,6 +75,7 @@
 *                           use integer types in stdint.h
 *           2024/01/10 1.15 branch from ver.2.4.3b34 for MADOCALIB
 *                           change constant MAXAGESSR 90.0 -> 60.0
+*           2025/01/06 1.16 support BeiDou.
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -443,7 +445,12 @@ static eph_t *seleph(gtime_t time, int sat, int iode, const nav_t *nav)
     
     for (i=0;i<nav->n;i++) {
         if (nav->eph[i].sat!=sat) continue;
-        if (iode>=0&&nav->eph[i].iode!=iode) continue;
+        if (sys==SYS_CMP) {
+            if (iode>=0&&((int)nav->eph[i].toes%2048)!=(iode*8)%2048) continue;
+        }
+        else {
+            if (iode>=0&&nav->eph[i].iode!=iode) continue;
+        }
         if (sys==SYS_GAL) {
             sel=getseleph(SYS_GAL);
             if (sel==0&&!(nav->eph[i].code&(1<<9))) continue; /* I/NAV */
@@ -582,7 +589,7 @@ static int satpos_sbas(gtime_t time, gtime_t teph, int sat, const nav_t *nav,
 {
     const sbssatp_t *sbs;
     int i;
-    
+    char satstr[6];
     trace(4,"satpos_sbas: time=%s sat=%2d\n",time_str(time,3),sat);
     
     /* search sbas satellite correciton */
@@ -591,7 +598,8 @@ static int satpos_sbas(gtime_t time, gtime_t teph, int sat, const nav_t *nav,
         if (sbs->sat==sat) break;
     }
     if (i>=nav->sbssat.nsat) {
-        trace(2,"no sbas correction for orbit: %s sat=%2d\n",time_str(time,0),sat);
+        satno2id(sat,satstr);
+        trace(2,"no sbas correction for orbit: %s %s sat=%2d\n",time_str(time,0),satstr,sat);
         ephpos(time,teph,sat,nav,-1,rs,dts,var,svh);
         *svh=-1;
         return 0;
@@ -612,23 +620,25 @@ static int satpos_ssr(gtime_t time, gtime_t teph, int sat, const nav_t *nav,
     eph_t *eph;
     double t1,t2,t3,er[3],ea[3],ec[3],rc[3],deph[3],dclk,dant[3]={0},tk;
     int i,sys;
+    char satstr[6];
     
     trace(4,"satpos_ssr: time=%s sat=%2d\n",time_str(time,3),sat);
     
     ssr=nav->ssr+sat-1;
+    satno2id(sat,satstr);
     
     if (!ssr->t0[0].time) {
-        trace(2,"no ssr orbit correction: %s sat=%2d\n",time_str(time,0),sat);
+        trace(2,"no ssr orbit correction: %s %s sat=%2d\n",time_str(time,0),satstr,sat);
         return 0;
     }
     if (!ssr->t0[1].time) {
-        trace(2,"no ssr clock correction: %s sat=%2d\n",time_str(time,0),sat);
+        trace(2,"no ssr clock correction: %s %s sat=%2d\n",time_str(time,0),satstr,sat);
         return 0;
     }
     /* inconsistency between orbit and clock correction */
     if (ssr->iod[0]!=ssr->iod[1]) {
-        trace(2,"inconsist ssr correction: %s sat=%2d iod=%d %d\n",
-              time_str(time,0),sat,ssr->iod[0],ssr->iod[1]);
+        trace(2,"inconsist ssr correction: %s %s sat=%2d iod=%d %d\n",
+              time_str(time,0),satstr,sat,ssr->iod[0],ssr->iod[1]);
         *svh=-1;
         return 0;
     }
@@ -638,8 +648,8 @@ static int satpos_ssr(gtime_t time, gtime_t teph, int sat, const nav_t *nav,
     
     /* ssr orbit and clock correction (ref [4]) */
     if (fabs(t1)>MAXAGESSR||fabs(t2)>MAXAGESSR) {
-        trace(2,"age of ssr error: %s sat=%2d t=%.0f %.0f\n",time_str(time,0),
-              sat,t1,t2);
+        trace(2,"age of ssr error: %s %s sat=%2d t=%.0f %.0f\n",time_str(time,0),
+              satstr,sat,t1,t2);
         *svh=-1;
         return 0;
     }

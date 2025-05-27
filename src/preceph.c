@@ -1,7 +1,8 @@
 /*------------------------------------------------------------------------------
 * preceph.c : precise ephemeris and clock functions
 *
-*          Copyright (C) 2023 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2023-2025 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2007-2020 by T.TAKASU, All rights reserved.
 *
 * references :
@@ -51,6 +52,8 @@
 *                           fix bug on reading SP3 file extension
 *           2022/12/07 1.18 branch from ver.2.4.3b34 for MADOCALIB
 *                           apply RTKLIB Bug and Known Problem List No.152
+*           2025/01/06 1.19 use api freq_idx2ant_idx(), freq_num2freq() and 
+*                            freq_idx2freq_num().
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -571,12 +574,7 @@ static int pephclk(gtime_t time, int sat, const nav_t *nav, double *dts,
 *          double *dant       I   satellite antenna phase center offset (ecef)
 *                                 {dx,dy,dz} (m) (iono-free LC value)
 * return : none
-* notes  : iono-free LC frequencies defined as follows:
-*            GPS/QZSS : L1-L2
-*            GLONASS  : G1-G2
-*            Galileo  : E1-E5b
-*            BDS      : B1I-B2I
-*            NavIC    : L5-S
+* notes  : The frequencies of the ionofree LC are corresponding to freq-index=0 and 1.
 *-----------------------------------------------------------------------------*/
 extern void satantoff(gtime_t time, const double *rs, int sat, const nav_t *nav,
                       double *dant)
@@ -584,7 +582,7 @@ extern void satantoff(gtime_t time, const double *rs, int sat, const nav_t *nav,
     const pcv_t *pcv=nav->pcvs+sat-1;
     double ex[3],ey[3],ez[3],es[3],r[3],rsun[3],gmst,erpv[5]={0},freq[2];
     double C1,C2,dant1,dant2;
-    int i,sys;
+    int i,sys,a1,a2;
     
     trace(4,"satantoff: time=%s sat=%2d\n",time_str(time,3),sat);
     
@@ -602,37 +600,23 @@ extern void satantoff(gtime_t time, const double *rs, int sat, const nav_t *nav,
     if (!normv3(r,ey)) return;
     cross3(ey,ez,ex);
     
-    /* iono-free LC coefficients */
-    sys=satsys(sat,NULL);
-    if (sys==SYS_GPS||sys==SYS_QZS) { /* L1-L2 */
-        freq[0]=FREQ1;
-        freq[1]=FREQ2;
-    }
-    else if (sys==SYS_GLO) { /* G1-G2 */
-        freq[0]=sat2freq(sat,CODE_L1C,nav);
-        freq[1]=sat2freq(sat,CODE_L2C,nav);
-    }
-    else if (sys==SYS_GAL) { /* E1-E5b */
-        freq[0]=FREQ1;
-        freq[1]=FREQ7;
-    }
-    else if (sys==SYS_CMP) { /* B1I-B2I */
-        freq[0]=FREQ1_CMP;
-        freq[1]=FREQ2_CMP;
-    }
-    else if (sys==SYS_IRN) { /* B1I-B2I */
-        freq[0]=FREQ5;
-        freq[1]=FREQ9;
-    }
-    else return;
+    /* frequency for freq-index=0,1 */
+    sys=satsys_bd2(sat,NULL);
+    freq[0]=freq_num2freq(sys,freq_idx2freq_num(sys,0),0);
+    freq[1]=freq_num2freq(sys,freq_idx2freq_num(sys,1),0);
     
+    /* iono-free LC coefficients */
     C1= SQR(freq[0])/(SQR(freq[0])-SQR(freq[1]));
     C2=-SQR(freq[1])/(SQR(freq[0])-SQR(freq[1]));
     
+    /* antenna index for freq-index=0,1 */
+    a1=freq_idx2ant_idx(sys,0);
+    a2=freq_idx2ant_idx(sys,1);
+    
     /* iono-free LC */
     for (i=0;i<3;i++) {
-        dant1=pcv->off[0][0]*ex[i]+pcv->off[0][1]*ey[i]+pcv->off[0][2]*ez[i];
-        dant2=pcv->off[1][0]*ex[i]+pcv->off[1][1]*ey[i]+pcv->off[1][2]*ez[i];
+        dant1=pcv->off[a1][0]*ex[i]+pcv->off[a1][1]*ey[i]+pcv->off[a1][2]*ez[i];
+        dant2=pcv->off[a2][0]*ex[i]+pcv->off[a2][1]*ey[i]+pcv->off[a2][2]*ez[i];
         dant[i]=C1*dant1+C2*dant2;
     }
 }

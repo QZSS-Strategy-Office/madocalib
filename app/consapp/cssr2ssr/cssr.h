@@ -1,11 +1,13 @@
 /*------------------------------------------------------------------------------
 * cssr.h : header file of cssr functions
 *
-* Copyright (c) 2024 Cabinet Office, Japan, All rights reserved.
-* Copyright (c) 2022-2024, Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+* Copyright (c) 2024-2025 Cabinet Office, Japan, All rights reserved.
+* Copyright (c) 2022-2025, Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *
 * author  : LHTC
 * history : 2020/02/03 1.0  new
+*           2025/03/18 1.1  change CSSR_MAXSYS
+*                           add CSSR_MAXNSIG
 *
 *-----------------------------------------------------------------------------*/
 #ifndef CSSR_H
@@ -16,8 +18,9 @@
 /* constants -----------------------------------------------------------------*/
 
 #define RTCM3PREAMB     0xD3        /* rtcm ver.3 frame preamble */
-#define CSSR_MAXSYS     10          /* max number of gnss */
+#define CSSR_MAXSYS     16          /* max number of gnss */
 #define CSSR_MSGTYPE    4073        /* CSSR Messages type defined by IS-QZSS-L6 */
+#define CSSR_MAXNSIG    16          /* max number of signals */
 
 /* type definitions ----------------------------------------------------------*/
 
@@ -29,8 +32,8 @@ typedef struct {                        /* cssr mask type */
     int nsig[CSSR_MAXSYS];              /* number of signals */
     int ncell[CSSR_MAXSYS];             /* number of cells */
     int sat_mask[CSSR_MAXSYS][MAXSAT];  /* satellite mask */
-    int sig_mask[CSSR_MAXSYS][MAXCODE]; /* signal mask */
-    int cell_mask[CSSR_MAXSYS][MAXCODE*MAXSAT]; /* cell mask */
+    int sig_mask[CSSR_MAXSYS][CSSR_MAXNSIG]; /* signal mask */
+    int cell_mask[CSSR_MAXSYS][CSSR_MAXNSIG*MAXSAT]; /* cell mask */
     int nbit;                           /* bit length of subtype 1 */
     int iod;                            /* IOD SSR of subtype 1 */
 } cssr_mask_t;

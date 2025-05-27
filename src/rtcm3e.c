@@ -2,7 +2,7 @@
 * rtcm3e.c : rtcm ver.3 message encoder functions
 *
 *          Copyright (C) 2012-2020 by T.TAKASU, All rights reserved.
-*          Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+*          Copyright (C) 2024-2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *
 * references :
 *     see rtcm.c
@@ -49,6 +49,7 @@
 *                           support phase discontinuity counter for SSR 7.
 *                           output data with zero phase bias value.
 *                           update SSR signal and tracking mode IDs.
+*           2025/01/06 1.25 use SSR signal and tracking mode IDs defined by rtcm3.c.
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -1452,34 +1453,6 @@ static int encode_ssr_head(int type, rtcm_t *rtcm, int sys, int subtype,
     setbitu(rtcm->buff,i,ns,nsat); i+=ns; /* no of satellites */
     return i;
 }
-/* SSR signal and tracking mode IDs ------------------------------------------*/
-static  const int codes_gps[32]={
-    CODE_L1C,CODE_L1P,CODE_L1W,CODE_L1S,CODE_L1L,CODE_L2C,CODE_L2D,CODE_L2S,
-    CODE_L2L,CODE_L2X,CODE_L2P,CODE_L2W,       0,       0,CODE_L5I,CODE_L5Q,
-    CODE_L5X,CODE_L1X
-};
-static const int codes_glo[32]={
-    CODE_L1C,CODE_L1P,CODE_L2C,CODE_L2P,CODE_L4A,CODE_L4B,CODE_L6A,CODE_L6B,
-    CODE_L3I,CODE_L3Q
-};
-static const int codes_gal[32]={
-    CODE_L1A,CODE_L1B,CODE_L1C,CODE_L1X,       0,CODE_L5I,CODE_L5Q,CODE_L5X,
-    CODE_L7I,CODE_L7Q,CODE_L7X,CODE_L8I,CODE_L8Q,       0,CODE_L6A,CODE_L6B,
-    CODE_L6C
-};
-static const int codes_qzs[32]={
-    CODE_L1C,CODE_L1S,CODE_L1L,CODE_L2S,CODE_L2L,CODE_L2X,CODE_L5I,CODE_L5Q,
-    CODE_L5X,CODE_L6S,CODE_L6L,       0,CODE_L1X,       0,       0,       0,
-           0,CODE_L6E
-};
-static const int codes_bds[32]={
-    CODE_L2I,CODE_L2Q,CODE_L2X,CODE_L6I,CODE_L6Q,CODE_L6X,CODE_L7I,CODE_L7Q,
-    CODE_L7X,CODE_L1D,CODE_L1P,       0,CODE_L5D,CODE_L5P,       0,CODE_L1A,
-           0,       0,CODE_L6A
-};
-static const int codes_sbs[32]={
-    CODE_L1C,CODE_L5I,CODE_L5Q
-};
 /* encode SSR 1: orbit corrections -------------------------------------------*/
 static int encode_ssr1(rtcm_t *rtcm, int sys, int subtype, int sync)
 {
@@ -1592,7 +1565,7 @@ static int encode_ssr2(rtcm_t *rtcm, int sys, int subtype, int sync)
 /* encode SSR 3: satellite code biases ---------------------------------------*/
 static int encode_ssr3(rtcm_t *rtcm, int sys, int subtype, int sync)
 {
-    const int *codes;
+    const uint8_t *sigs;
     double udint=0.0;
     int i,j,k,iod=0,nsat,prn,nbias,np,offp;
     int code[MAXCODE],bias[MAXCODE];
@@ -1600,12 +1573,12 @@ static int encode_ssr3(rtcm_t *rtcm, int sys, int subtype, int sync)
     trace(3,"encode_ssr3: sys=%d subtype=%d sync=%d\n",sys,subtype,sync);
     
     switch (sys) {
-        case SYS_GPS: np=6; offp=  0; codes=codes_gps; break;
-        case SYS_GLO: np=5; offp=  0; codes=codes_glo; break;
-        case SYS_GAL: np=6; offp=  0; codes=codes_gal; break;
-        case SYS_QZS: np=4; offp=192; codes=codes_qzs; break;
-        case SYS_CMP: np=6; offp=  1; codes=codes_bds; break;
-        case SYS_SBS: np=6; offp=120; codes=codes_sbs; break;
+        case SYS_GPS: np=6; offp=  0; sigs=ssr_sig_gps; break;
+        case SYS_GLO: np=5; offp=  0; sigs=ssr_sig_glo; break;
+        case SYS_GAL: np=6; offp=  0; sigs=ssr_sig_gal; break;
+        case SYS_QZS: np=4; offp=192; sigs=ssr_sig_qzs; break;
+        case SYS_CMP: np=6; offp=  1; sigs=ssr_sig_cmp; break;
+        case SYS_SBS: np=6; offp=120; sigs=ssr_sig_sbs; break;
         default: return 0;
     }
     if (subtype>0) { /* IGS SSR */
@@ -1627,9 +1600,9 @@ static int encode_ssr3(rtcm_t *rtcm, int sys, int subtype, int sync)
         if (satsys(j+1,&prn)!=sys||!rtcm->ssr[j].update) continue;
         
         for (k=nbias=0;k<32;k++) {
-            if (!codes[k]||rtcm->ssr[j].vcbias[codes[k]-1]==0) continue;
+            if (!sigs[k]||rtcm->ssr[j].vcbias[sigs[k]-1]==0) continue;
             code[nbias]=k;
-            bias[nbias++]=ROUND(rtcm->ssr[j].cbias[codes[k]-1]/0.01);
+            bias[nbias++]=ROUND(rtcm->ssr[j].cbias[sigs[k]-1]/0.01);
         }
         setbitu(rtcm->buff,i,np,prn-offp); i+=np; /* satellite ID */
         setbitu(rtcm->buff,i, 5,nbias);    i+= 5; /* number of code biases */
@@ -1799,7 +1772,7 @@ static int encode_ssr6(rtcm_t *rtcm, int sys, int subtype, int sync)
 /* encode SSR 7: satellite phase biases --------------------------------------*/
 static int encode_ssr7(rtcm_t *rtcm, int sys, int subtype, int sync)
 {
-    const int *codes;
+    const uint8_t *sigs;
     double udint=0.0;
     int i,j,k,iod=0,nsat,prn,nbias,np,offp;
     int code[MAXCODE],pbias[MAXCODE],stdpb[MAXCODE],yaw_ang,yaw_rate;
@@ -1808,12 +1781,12 @@ static int encode_ssr7(rtcm_t *rtcm, int sys, int subtype, int sync)
     trace(3,"encode_ssr7: sys=%d subtype=%d sync=%d\n",sys,subtype,sync);
     
     switch (sys) {
-        case SYS_GPS: np=6; offp=  0; codes=codes_gps; break;
-        case SYS_GLO: np=5; offp=  0; codes=codes_glo; break;
-        case SYS_GAL: np=6; offp=  0; codes=codes_gal; break;
-        case SYS_QZS: np=4; offp=192; codes=codes_qzs; break;
-        case SYS_CMP: np=6; offp=  1; codes=codes_bds; break;
-        case SYS_SBS: np=6; offp=120; codes=codes_sbs; break;
+        case SYS_GPS: np=6; offp=  0; sigs=ssr_sig_gps; break;
+        case SYS_GLO: np=5; offp=  0; sigs=ssr_sig_glo; break;
+        case SYS_GAL: np=6; offp=  0; sigs=ssr_sig_gal; break;
+        case SYS_QZS: np=4; offp=192; sigs=ssr_sig_qzs; break;
+        case SYS_CMP: np=6; offp=  1; sigs=ssr_sig_cmp; break;
+        case SYS_SBS: np=6; offp=120; sigs=ssr_sig_sbs; break;
         default: return 0;
     }
     if (subtype>0) { /* IGS SSR */
@@ -1835,11 +1808,11 @@ static int encode_ssr7(rtcm_t *rtcm, int sys, int subtype, int sync)
         if (satsys(j+1,&prn)!=sys||!rtcm->ssr[j].update) continue;
         
         for (k=nbias=0;k<32;k++) {
-            if (!codes[k]||rtcm->ssr[j].vpbias[codes[k]-1]==0) continue;
+            if (!sigs[k]||rtcm->ssr[j].vpbias[sigs[k]-1]==0) continue;
             code[nbias]=k;
-            discnt[nbias ]=rtcm->ssr[j].discnt[codes[k]-1];
-            pbias[nbias  ]=ROUND(rtcm->ssr[j].pbias[codes[k]-1]/0.0001);
-            stdpb[nbias++]=ROUND(rtcm->ssr[j].stdpb[codes[k]-1]/0.0001);
+            discnt[nbias ]=rtcm->ssr[j].discnt[sigs[k]-1];
+            pbias[nbias  ]=ROUND(rtcm->ssr[j].pbias[sigs[k]-1]/0.0001);
+            stdpb[nbias++]=ROUND(rtcm->ssr[j].stdpb[sigs[k]-1]/0.0001);
         }
         yaw_ang =ROUND(rtcm->ssr[j].yaw_ang /180.0* 256.0);
         yaw_rate=ROUND(rtcm->ssr[j].yaw_rate/180.0*8192.0);

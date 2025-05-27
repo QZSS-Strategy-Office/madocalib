@@ -1,8 +1,8 @@
 /*------------------------------------------------------------------------------
 * rtcm3.c : RTCM ver.3 message decorder functions
 *
-*          Copyright (C) 2023 Cabinet Office, Japan, All rights reserved.
-*          Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+*          Copyright (C) 2023-2025 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024-2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2009-2020 by T.TAKASU, All rights reserved.
 *
 * references :
@@ -55,6 +55,7 @@
 *                           support phase discontinuity counter for SSR 7.
 *                           add process to output data with zero phase bias 
 *                           value in rtcm3e.c
+*           2025/01/06 1.25 support B1C,B2a,B2b..
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -121,8 +122,8 @@ const char *msm_sig_sbs[32]={
 const char *msm_sig_cmp[32]={
     /* BeiDou: ref [17] table 3.5-108 */
     ""  ,"2I","2Q","2X",""  ,""  ,""  ,"6I","6Q","6X",""  ,""  ,
-    ""  ,"7I","7Q","7X",""  ,""  ,""  ,""  ,""  ,""  ,""  ,""  ,
-    ""  ,""  ,""  ,""  ,""  ,""  ,""  ,""
+    ""  ,"7I","7Q","7X",""  ,""  ,""  ,""  ,""  ,"5D","5P","5X",
+    "7D",""  ,""  ,""  ,""  ,"1D","1P","1X"
 };
 const char *msm_sig_irn[32]={
     /* NavIC/IRNSS: ref [17] table 3.5-108.3 */
@@ -141,9 +142,9 @@ const uint8_t ssr_sig_glo[32]={
     CODE_L3I,CODE_L3Q
 };
 const uint8_t ssr_sig_gal[32]={
-    CODE_L1A,CODE_L1B,CODE_L1C,CODE_L1X,       0,CODE_L5I,CODE_L5Q,CODE_L5X,
+    CODE_L1A,CODE_L1B,CODE_L1C,CODE_L1X,CODE_L1Z,CODE_L5I,CODE_L5Q,CODE_L5X,
     CODE_L7I,CODE_L7Q,CODE_L7X,CODE_L8I,CODE_L8Q,       0,CODE_L6A,CODE_L6B,
-    CODE_L6C
+    CODE_L6C,CODE_L6X,CODE_L6Z
 };
 const uint8_t ssr_sig_qzs[32]={
     CODE_L1C,CODE_L1S,CODE_L1L,CODE_L2S,CODE_L2L,CODE_L2X,CODE_L5I,CODE_L5Q,
@@ -152,7 +153,7 @@ const uint8_t ssr_sig_qzs[32]={
 };
 const uint8_t ssr_sig_cmp[32]={
     CODE_L2I,CODE_L2Q,CODE_L2X,CODE_L6I,CODE_L6Q,CODE_L6X,CODE_L7I,CODE_L7Q,
-    CODE_L7X,CODE_L1D,CODE_L1P,       0,CODE_L5D,CODE_L5P,       0,CODE_L1A,
+    CODE_L7X,CODE_L1D,CODE_L1P,CODE_L1X,CODE_L5D,CODE_L5P,CODE_L5X,CODE_L1A,
            0,       0,CODE_L6A
 };
 const uint8_t ssr_sig_sbs[32]={
@@ -2039,7 +2040,7 @@ static void save_msm_obs(rtcm_t *rtcm, int sys, msm_h_t *h, const double *r,
         }
         /* signal to rinex obs type */
         code[i]=obs2code(sig[i]);
-        idx[i]=code2idx(sys,code[i]);
+        idx[i]=code2freq_idx(sys,code[i]);
         
         if (code[i]!=CODE_NONE) {
             if (q) q+=sprintf(q,"L%s%s",sig[i],i<h->nsig-1?",":"");

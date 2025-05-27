@@ -14,8 +14,9 @@ The library is derived from RTKLIB (version 2.4.3 b34, Ref. Note1) and functions
 
 
 # USAGE
-
-Please refere to the MADOCALIB manual for usage of MADOCALIB.
+Go to the folder of "sample_data". Double-click and excute the batch file of 
+"exec_ppp.bat" on your Windows PC.
+Please refere to the MADOCALIB manual for usage of MADOCALIB in detail.
 
 
 # LICENSE
@@ -24,8 +25,8 @@ The MADOCALIB is distributed under the following BSD 2-clause license (http://op
 Users are permitted to develop, produce or sell their own non-commercial or commercial 
 products utilizing, linking or including MADOCALIB as long as they comply with the license.
 
-   Copyright (C) 2023-2024 Cabinet Office, Japan, All rights reserved.
-   Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+   Copyright (C) 2023-2025 Cabinet Office, Japan, All rights reserved.
+   Copyright (C) 2024-2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
    Copyright (C) 2023-2024 Japan Aerospace Exploration Agency. All Rights Reserved.
    Copyright (C) 2023-2024 TOSHIBA ELECTRONIC TECHNOLOGIES CORPORATION. All Rights Reserved.
    Copyright (c) 2007-2020, T. Takasu, All rights reserved.
@@ -81,6 +82,12 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                       PPP processing is performed normally even when an undefined
                       GNSSs are stored in the reserved GNSS ID of the Compact SSR.
                       (See mdccssr.c)
+* 2025/05/27 2.0  - The 6th public version.
+                      Support IS-QZSS-MDC-004.
+                      Support triple/quad-frequency PPP and PPP-AR.
+                      Support multiple input files of qzssl6e_file for multiple PRN input.
+                      Added the makefiles for Linux.
+
 
 #NOTES
 
