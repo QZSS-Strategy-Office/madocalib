@@ -37,6 +37,12 @@
 *           2024/09/27 1.17 VER_MADOCALIB 1.4
 *           2025/01/06 1.18 VER_MADOCALIB 2.0
 *           2026/02/26 1.19 VER_MADOCALIB 2.1
+*           2026/10/30 1.20 VER_MADOCALIB 2.2
+*                           support BDS-3 satellites assigned to PRN 1-18:
+*                           add prcopt_t:bds2prn, set_bds2prn(), is_bds2prn(),
+*                           bds_gen(), BDSGEN_2, BDSGEN_3
+*                           add prcopt_t:bds3igso, set_bds3igso(),
+*                           is_bds3igso()
 *-----------------------------------------------------------------------------*/
 #ifndef RTKLIB_H
 #define RTKLIB_H
@@ -68,7 +74,7 @@ extern "C" {
 /* constants -----------------------------------------------------------------*/
 
 #define VER_RTKLIB  "2.4.3"             /* library version */
-#define VER_MADOCALIB "2.1"
+#define VER_MADOCALIB "2.2"
 
 #define PATCH_LEVEL "b34"               /* patch level */
 
@@ -198,6 +204,8 @@ extern "C" {
 #define NSATCMP     (MAXPRNCMP-MINPRNCMP+1) /* number of BeiDou satellites */
 #define NSYSCMP     1
 #define MINPRNBDS3  19                  /* min satellite sat number of BeiDou-3 */
+#define BDSGEN_2    2                   /* BeiDou generation BDS-2 */
+#define BDSGEN_3    3                   /* BeiDou generation BDS-3 */
 #else
 #define MINPRNCMP   0
 #define MAXPRNCMP   0
@@ -1086,6 +1094,8 @@ typedef struct {        /* processing options type */
     char rtcmopt[256];  /* rtcm options */
     int  pppsig[5];     /* signal selection [0]GPS,[1]QZS,[2]GAL,[3]BDS2,[4]BDS3 */
     char *l6dpath[MIONO_MAX_PRN]; /* MADOCA-PPP ionospheric correction L6D file path */
+    char bds2prn[256];  /* BDS-2 satellites in PRN 1-18 ("": no BDS-2) */
+    char bds3igso[256]; /* BDS-3 IGSO satellites ("": C06-C08) */
 } prcopt_t;
 
 typedef struct {        /* solution options type */
@@ -1381,6 +1391,11 @@ extern opt_t sysopts[];              /* system options table */
 EXPORT int  satno   (int sys, int prn);
 EXPORT int  satsys  (int sat, int *prn);
 EXPORT int  satsys_bd2(int sat, int *prn);
+EXPORT int  set_bds2prn(const char *str);   /* BDS-2 satellites in PRN 1-18 */
+EXPORT int  is_bds2prn(int prn);
+EXPORT int  set_bds3igso(const char *str);  /* BDS-3 IGSO satellites */
+EXPORT int  is_bds3igso(int prn);
+EXPORT int  bds_gen(int prn);               /* BDSGEN_2, BDSGEN_3 or 0 */
 EXPORT int  satid2no(const char *id);
 EXPORT void satno2id(int sat, char *id);
 EXPORT int  satexclude(int sat, double var, int svh, const prcopt_t *opt);

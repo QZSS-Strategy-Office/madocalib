@@ -1,8 +1,8 @@
 /*------------------------------------------------------------------------------
 * options.c : options functions
 *
-*          Copyright (C) 2023-2025 Cabinet Office, Japan, All rights reserved.
-*          Copyright (C) 2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+*          Copyright (C) 2023-2026 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2025-2026 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2010-2020 by T.TAKASU, All rights reserved.
 *
 * version : $Revision:$ $Date:$
@@ -36,6 +36,8 @@
 *           2025/03/10  1.16 add pos2-siggps, pos2-sigqzs, pos2-siggal, 
 *                             pos2-sigbds2, pos2-sigbds3
 *                            change pos1-frequency
+*           2026/10/30  1.17 add pos2-bds2prn (BDS-2 satellites in PRN 1-18)
+*                            add pos2-bds3igso (BDS-3 IGSO satellites)
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -76,6 +78,8 @@ static char snrmask_[NFREQ][1024];
 #define SIGOPT3 "0:E1/E5a,1:E1/E5b,2:E1/E6,3:E1/E5a/E5b/E6,4:E1/E5a/E6/E5b"
 #define SIGOPT4 "0:B1I/B3I,1:B1I/B2I,2:B1I/B3I/B2I"
 #define SIGOPT5 "0:B1I/B3I,1:B1I/B2a,2:B1I/B3I/B2a"
+#define BDS2OPT "satid(C01-C18),.. BDS-2 in PRN 1-18 (\"\":no BDS-2)"
+#define IGSOOPT "satid,.. BDS-3 IGSO (\"\":C06-C08)"
 
 EXPORT opt_t sysopts[]={
     {"pos1-posmode",    3,  (void *)&prcopt_.mode,       MODOPT },
@@ -130,6 +134,8 @@ EXPORT opt_t sysopts[]={
     {"pos2-siggal",     3,  (void *)&prcopt_.pppsig[2],  SIGOPT3},
     {"pos2-sigbds2",    3,  (void *)&prcopt_.pppsig[3],  SIGOPT4},
     {"pos2-sigbds3",    3,  (void *)&prcopt_.pppsig[4],  SIGOPT5},
+    {"pos2-bds2prn",    2,  (void *)prcopt_.bds2prn,     BDS2OPT },
+    {"pos2-bds3igso",   2,  (void *)prcopt_.bds3igso,    IGSOOPT },
 
     {"out-solformat",   3,  (void *)&solopt_.posf,       SOLOPT },
     {"out-outhead",     3,  (void *)&solopt_.outhead,    SWTOPT },

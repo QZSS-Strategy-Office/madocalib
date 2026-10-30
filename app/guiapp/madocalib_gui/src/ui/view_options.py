@@ -361,6 +361,18 @@ def option_window_views(main_window, variables_main) -> None:
         option_window, values=["B1I/B3I", "B1I/B2a", "B1I/B3I/B2a"], width=25
     )
 
+    # BDS-2 satellites in PRN 1-18 (pos2-bds2prn)
+    variables_options.label_pos2_bds2prn = tk.Label(
+        option_window, text="BeiDou-2 Satellites in PRN 1-18"
+    )
+    variables_options.entry_pos2_bds2prn = tk.Entry(option_window, width=27)
+
+    # BDS-3 IGSO satellites (pos2-bds3igso)
+    variables_options.label_pos2_bds3igso = tk.Label(
+        option_window, text="BeiDou-3 IGSO Satellites"
+    )
+    variables_options.entry_pos2_bds3igso = tk.Entry(option_window, width=27)
+
     # --- Output ---
     variables_options.label_out_solformat = tk.Label(
         option_window, text="Solution Format"
@@ -908,6 +920,10 @@ def setting2_2(N: int, variables_options) -> None:
         variables_options.combo_pos2_siggal.place_forget()
         variables_options.combo_pos2_sigbds2.place_forget()
         variables_options.combo_pos2_sigbds3.place_forget()
+        variables_options.label_pos2_bds2prn.place_forget()
+        variables_options.entry_pos2_bds2prn.place_forget()
+        variables_options.label_pos2_bds3igso.place_forget()
+        variables_options.entry_pos2_bds3igso.place_forget()
     else:
         variables_options.label_pos2_siggps.place(x=20, y=40)
         variables_options.label_pos2_sigqzs.place(x=20, y=70)
@@ -919,6 +935,14 @@ def setting2_2(N: int, variables_options) -> None:
         variables_options.combo_pos2_siggal.place(x=340, y=100)
         variables_options.combo_pos2_sigbds2.place(x=340, y=130)
         variables_options.combo_pos2_sigbds3.place(x=340, y=160)
+        variables_options.label_pos2_bds2prn.place(x=20, y=190)
+        variables_options.entry_pos2_bds2prn.place(
+            x=340, y=190, width=variables_options.combo_pos2_sigbds3.winfo_reqwidth()
+        )
+        variables_options.label_pos2_bds3igso.place(x=20, y=220)
+        variables_options.entry_pos2_bds3igso.place(
+            x=340, y=220, width=variables_options.combo_pos2_sigbds3.winfo_reqwidth()
+        )
 
 
 def output(N: int, variables_options) -> None:

@@ -1,13 +1,17 @@
 /*------------------------------------------------------------------------------
 * cssr.c : cssr functions
 *
-* Copyright (c) 2024-2025 Cabinet Office, Japan, All rights reserved.
-* Copyright (c) 2022-2025, Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+* Copyright (c) 2024-2026 Cabinet Office, Japan, All rights reserved.
+* Copyright (c) 2022-2026, Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *
 * author  : LHTC
 * history : 2022/02/03 1.0 new
 *           2025/03/18 1.1 support BDS3
 *                          handle not-available-value of cssr
+*           2026/10/30 1.2 support BDS-3 satellites in GNSS ID 3 (PRN 1-18)
+*                          (IS-QZSS-MDC revision): apply codes_bd3 to BDS-3
+*                          satellites in GNSS ID 3 (satsys_bd2()),
+*                          count signal mask bits of undefined signals
 *
 *-----------------------------------------------------------------------------*/
 #include "cssr.h"
@@ -48,6 +52,23 @@ static int dump(int type, const char *format, ...)
     fprintf(fp_dump,"%s",buff);
     fflush(fp_dump);
     return 0;
+}
+/* signal code of a satellite --------------------------------------------------
+* for GNSS ID 3 (BDS, PRN 1-18) and a BDS-3 satellite (satsys_bd2(), given by
+* set_bds2prn()), the signal mask is read by codes_bd3 (IS-QZSS-MDC revision).
+* args   : cssr_mask_t *cssr_mask I  cssr mask
+*          int gnssid   I   Compact SSR GNSS ID
+*          int sat      I   satellite number
+*          int l        I   signal mask bit (0-15)
+* return : code (0: undefined)
+*-----------------------------------------------------------------------------*/
+static int cssr_sigcode(const cssr_mask_t *cssr_mask, int gnssid, int sat,
+                        int l)
+{
+    if (gnssid==3&&satsys_bd2(sat,NULL)==SYS_CMP) {
+        return cssr_mask->sig_mask_bd3[l];
+    }
+    return cssr_mask->sig_mask[gnssid][l];
 }
 /* initialize cssr control ---------------------------------------------------*/
 extern int cssr_init(cssr_t *cssr)
@@ -209,6 +230,8 @@ static int decode_st1(rtcm_t *rtcm, cssr_t *cssr)
             b=getbitu(rtcm->buff,i,1); i+=1; /* signal mask */
             if (b) cssr_mask->nsig[gnssid]++;
             dump(1,"%d",b);
+            cssr_mask->sig_bit[gnssid][k]=b;
+            if (gnssid==3) cssr_mask->sig_mask_bd3[k]=b?codes_bd3[k]:0;
             
             if (codes[k]<=0) continue;
             cssr_mask->sig_mask[gnssid][k]=b?codes[k]:0;
@@ -382,12 +405,14 @@ static int decode_st4(rtcm_t *rtcm, cssr_t *cssr)
                 vcbias[l]=0;
             }
             for (l=0;l<CSSR_MAXNSIG;l++) {
-                if (!(code=cssr_mask->sig_mask[j][l])) continue;
+                if (!cssr_mask->sig_bit[j][l]) continue; /* bit not set */
                 isig++;
                 
                 if (!cssr_mask->cell_mask[j][isig+cssr_mask->nsig[j]*isat]) continue;
                 
                 bias=getbits(rtcm->buff,i,11)*0.02; i+=11;
+                code=cssr_sigcode(cssr_mask,j,k+1,l);
+                if (code<=0) continue; /* undefined signal */
                 cbias[code-1]=bias;
                 vcbias[code-1]=1; /* 1:output */
                 dump(4," CODE=%s(%2d)",code2obs(code),l);
@@ -446,13 +471,15 @@ static int decode_st5(rtcm_t *rtcm, cssr_t *cssr)
                 discnt[l]=0;
             }
             for (l=0;l<CSSR_MAXNSIG;l++) {
-                if (!(code=cssr_mask->sig_mask[j][l])) continue;
+                if (!cssr_mask->sig_bit[j][l]) continue; /* bit not set */
                 isig++;
                 
                 if (!cssr_mask->cell_mask[j][isig+cssr_mask->nsig[j]*isat]) continue;
                 
                 bias=getbits(rtcm->buff,i,15)*0.001; i+=15;
                 di  =getbitu(rtcm->buff,i, 2);       i+= 2; /* discontinuity indicator */
+                code=cssr_sigcode(cssr_mask,j,k+1,l);
+                if (code<=0) continue; /* undefined signal */
                 pbias [code-1]=bias;
                 discnt[code-1]=di;
                 vpbias[code-1]=1; /* 1:output */

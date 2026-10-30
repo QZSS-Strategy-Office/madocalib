@@ -94,9 +94,11 @@ For information regarding the ownership and usage guidelines of the QZSS logo, p
                       Support triple/quad-frequency PPP and PPP-AR.
                       Support multiple input files of qzssl6e_file for multiple PRN input.
                       Added the makefiles for Linux.
-
 * 2026/02/19 2.1  - The 7th public version.
                       Added the MADOCALIB_GUI.
+
+* 2026/10/30 2.2  - The 8th public version.
+                      Support IS-QZSS-MDC-005 (pre-release).
 
 
 #NOTES

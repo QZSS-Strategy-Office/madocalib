@@ -8,13 +8,13 @@ setlocal enabledelayedexpansion
 
 set BIN=..\bin\rnx2rtkp.exe
 set CONF=..\app\consapp\rnx2rtkp\gcc_mingw\sample_pppar_iono.conf
-set OBS=.\data\rinex\MIZU00JPN_R_%%Y%%n0000_01D_30S_MO.rnx
-set NAV=.\data\rinex\BRDM00DLR_S_%%Y%%n0000_01D_MN.rnx
+set OBS=.\data\rinex\obs\%%Y\%%n\MIZU00JPN_R_%%Y%%n0000_01D_30S_MO.rnx
+set NAV=.\data\rinex\BRDC\%%Y\%%n\BRDM00DLR_S_%%Y%%n0000_01D_MN.rnx
 set L6E1=.\data\l6_is-qzss-mdc-004\%%Y\%%n\%%Y%%n%%HU.204.l6
 set L6E2=.\data\l6_is-qzss-mdc-004\%%Y\%%n\%%Y%%n%%HU.206.l6
 set L6D1=.\data\l6_is-qzss-mdc-004\%%Y\%%n\%%Y%%n%%HU.200.l6
 set L6D2=.\data\l6_is-qzss-mdc-004\%%Y\%%n\%%Y%%n%%HU.201.l6
-set ANT=.\data\igs20.atx
+set ANT=.\data\igs20_2290.atx
 set OUT=.\result_exec_pppar_ion
 
 mkdir %OUT%

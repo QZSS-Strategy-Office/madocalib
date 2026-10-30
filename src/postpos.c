@@ -1,8 +1,8 @@
 /*------------------------------------------------------------------------------
 * postpos.c : post-processing positioning
 *
-*          Copyright (C) 2023-2025 Cabinet Office, Japan, All rights reserved.
-*          Copyright (C) 2024-2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+*          Copyright (C) 2023-2026 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024-2026 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2007-2020 by T.TAKASU, All rights reserved.
 *
 * version : $Revision: 1.1 $ $Date: 2008/07/17 21:48:06 $
@@ -54,6 +54,8 @@
 *           2024/03/15  1.28 change solution program from RTKLIB to MADOCALIB
 *           2024/09/27  1.29 support multiple files of qzssl6d_file.
 *           2025/03/10  1.30 support multiple files of qzssl6e_file.
+*           2026/10/30  1.31 postpos(): apply pos2-bds2prn by set_bds2prn()
+*                            and pos2-bds3igso by set_bds3igso()
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -1400,6 +1402,20 @@ extern int postpos(gtime_t ts, gtime_t te, double ti, double tu,
     char *ifile[MAXINFILE],ofile[1024],*ext;
     
     trace(3,"postpos : ti=%.0f tu=%.0f n=%d outfile=%s\n",ti,tu,n,outfile);
+
+    /* BDS-2 satellites in PRN 1-18: set before reading files, since the
+       generation of BeiDou satellites depends on it */
+    if (set_bds2prn(popt->bds2prn)<0) {
+        trace(1,"postpos : invalid pos2-bds2prn=%s (all BDS-3)\n",
+              popt->bds2prn);
+        showmsg("warning : invalid pos2-bds2prn=%s (all BDS-3)",popt->bds2prn);
+    }
+    /* BDS-3 IGSO satellites */
+    if (set_bds3igso(popt->bds3igso)<0) {
+        trace(1,"postpos : invalid pos2-bds3igso=%s (C06-C08)\n",
+              popt->bds3igso);
+        showmsg("warning : invalid pos2-bds3igso=%s (C06-C08)",popt->bds3igso);
+    }
     
     /* open processing session */
     if (!openses(popt,sopt,fopt,&navs,&pcvss,&pcvsr)) return -1;

@@ -1,8 +1,8 @@
 /*------------------------------------------------------------------------------
 * rtkcmn.c : rtklib common functions
 *
-*          Copyright (C) 2023-2025 Cabinet Office, Japan, All rights reserved.
-*          Copyright (C) 2024-2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+*          Copyright (C) 2023-2026 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024-2026 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2007-2020 by T.TAKASU, All rights reserved.
 *
 * options : -DLAPACK   use LAPACK/BLAS
@@ -161,6 +161,11 @@
 *                           add API freq_num2ant_idx() and freq_idx2ant_idx() 
 *                            to get antenna-index.
 *                           support QZS L1C/B(1E)
+*           2026/10/30 1.51 support BDS-3 satellites assigned to PRN 1-18
+*                            (BeiDou PRN reassignment in April 2026).
+*                           add API set_bds2prn(), is_bds2prn(), bds_gen().
+*                           change satsys_bd2(), satno(SYS_BD2,prn) to use them.
+*                           add API set_bds3igso(), is_bds3igso().
 *-----------------------------------------------------------------------------*/
 #define _POSIX_C_SOURCE 199506
 #include <stdarg.h>
@@ -499,7 +504,7 @@ extern int satno(int sys, int prn)
             if (prn<MINPRNCMP||MAXPRNCMP<prn) return 0;
             return NSATGPS+NSATGLO+NSATGAL+NSATQZS+prn-MINPRNCMP+1;
         case SYS_BD2:
-            if (prn<MINPRNCMP||MINPRNBDS3<=prn) return 0;
+            if (prn<MINPRNCMP||MINPRNBDS3<=prn||!is_bds2prn(prn)) return 0;
             return NSATGPS+NSATGLO+NSATGAL+NSATQZS+prn-MINPRNCMP+1;
         case SYS_IRN:
             if (prn<MINPRNIRN||MAXPRNIRN<prn) return 0;
@@ -564,10 +569,130 @@ extern int satsys_bd2(int sat, int *prn)
     int sys=SYS_NONE,_prn;
     
     sys=satsys(sat,&_prn);
-    if (sys==SYS_CMP&&(_prn)<MINPRNBDS3) sys=SYS_BD2;
+    if (sys==SYS_CMP&&is_bds2prn(_prn)) sys=SYS_BD2;
     
     if (prn) *prn=_prn;
     return sys;
+}
+/* BDS-2 satellites in PRN 1-18 ------------------------------------------------
+* since the BeiDou PRN reassignment in April 2026, BDS-3 satellites are also
+* assigned to PRN 1-18. a BeiDou satellite of PRN 1-18 is BDS-2 only when it is
+* listed by set_bds2prn() (pos2-bds2prn). PRN >= MINPRNBDS3 is always BDS-3.
+* default: no BDS-2 satellite (all of PRN 1-18 are BDS-3)
+*-----------------------------------------------------------------------------*/
+static uint8_t bdsgen_[MAXPRNCMP+1]={ /* index: PRN, BDSGEN_2 or BDSGEN_3 */
+    0,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3
+};
+
+/* set BDS-2 satellites in PRN 1-18 --------------------------------------------
+* args   : const char *str  I   list of satellite ids, e.g. "C09,C10", "C09-C10"
+*                               ("" or NULL: no BDS-2 satellite)
+* return : number of satellites set
+*          (-1: invalid string, no BDS-2 satellite is set (all BDS-3))
+* notes  : affects satsys_bd2(), satno(SYS_BD2,prn) and all callers of them
+*-----------------------------------------------------------------------------*/
+extern int set_bds2prn(const char *str)
+{
+    uint8_t list[MAXPRNCMP+1]={0};
+    char buff[1024],*p,*q;
+    int prn1,prn2,prn,n=0;
+
+    for (prn=MINPRNCMP;prn<MINPRNBDS3;prn++) list[prn]=BDSGEN_3;
+    memcpy(bdsgen_,list,sizeof(bdsgen_));
+
+    if (!str||!*str) return 0;
+    strncpy(buff,str,sizeof(buff)-1); buff[sizeof(buff)-1]='\0';
+
+    for (p=strtok(buff,", ");p;p=strtok(NULL,", ")) {
+        if (*p!='C'&&*p!='c') return -1;
+        prn1=atoi(p+1);
+        if ((q=strchr(p,'-'))) {
+            if (*(q+1)!='C'&&*(q+1)!='c') return -1;
+            prn2=atoi(q+2);
+        }
+        else prn2=prn1;
+        if (prn1<MINPRNCMP||prn2>=MINPRNBDS3||prn1>prn2) return -1;
+        for (prn=prn1;prn<=prn2;prn++) {
+            if (list[prn]!=BDSGEN_2) n++;
+            list[prn]=BDSGEN_2;
+        }
+    }
+    memcpy(bdsgen_,list,sizeof(bdsgen_));
+    return n;
+}
+/* test BDS-2 satellite --------------------------------------------------------
+* args   : int    prn       I   BeiDou PRN (1-MAXPRNCMP)
+* return : 1: BDS-2, 0: BDS-3 (or out of range)
+*-----------------------------------------------------------------------------*/
+extern int is_bds2prn(int prn)
+{
+    return bds_gen(prn)==BDSGEN_2;
+}
+/* BDS-3 IGSO satellites -------------------------------------------------------
+* PRN of BDS-3 IGSO satellites, given by set_bds3igso() (pos2-bds3igso).
+* default: C06-C08 (after the BeiDou PRN reassignment in April 2026)
+*-----------------------------------------------------------------------------*/
+static uint8_t bds3igso_[MAXPRNCMP+1]={ /* index: PRN, 1: IGSO */
+    0,0,0,0,0,0,1,1,1
+};
+
+/* set BDS-3 IGSO satellites ---------------------------------------------------
+* args   : const char *str  I   list of satellite ids, e.g. "C06-C08",
+*                               "C38,C39,C40" ("" or NULL: C06-C08)
+* return : number of satellites set
+*          (-1: invalid string, the default C06-C08 is set)
+* notes  : used to select the reference satellite of ppp-ar
+*-----------------------------------------------------------------------------*/
+extern int set_bds3igso(const char *str)
+{
+    uint8_t list[MAXPRNCMP+1]={0};
+    char buff[1024],*p,*q;
+    int prn1,prn2,prn,n=0;
+
+    for (prn=6;prn<=8;prn++) list[prn]=1;
+    memcpy(bds3igso_,list,sizeof(bds3igso_));
+
+    if (!str||!*str) return 3;
+    strncpy(buff,str,sizeof(buff)-1); buff[sizeof(buff)-1]='\0';
+    memset(list,0,sizeof(list));
+
+    for (p=strtok(buff,", ");p;p=strtok(NULL,", ")) {
+        if (*p!='C'&&*p!='c') return -1;
+        prn1=atoi(p+1);
+        if ((q=strchr(p,'-'))) {
+            if (*(q+1)!='C'&&*(q+1)!='c') return -1;
+            prn2=atoi(q+2);
+        }
+        else prn2=prn1;
+        if (prn1<MINPRNCMP||prn2>MAXPRNCMP||prn1>prn2) return -1;
+        for (prn=prn1;prn<=prn2;prn++) {
+            if (!list[prn]) n++;
+            list[prn]=1;
+        }
+    }
+    memcpy(bds3igso_,list,sizeof(bds3igso_));
+    return n;
+}
+/* test BDS-3 IGSO satellite ---------------------------------------------------
+* args   : int    prn       I   BeiDou PRN (1-MAXPRNCMP)
+* return : 1: listed as BDS-3 IGSO, 0: not listed (or out of range)
+*-----------------------------------------------------------------------------*/
+extern int is_bds3igso(int prn)
+{
+    if (prn<MINPRNCMP||MAXPRNCMP<prn) return 0;
+    return bds3igso_[prn];
+}
+/* BeiDou generation of PRN ----------------------------------------------------
+* args   : int    prn       I   PRN number of BeiDou satellite
+* return : BDSGEN_2 (BDS-2), BDSGEN_3 (BDS-3), 0 (invalid PRN)
+* notes  : PRN 1-18 follow the list given by set_bds2prn() (pos2-bds2prn).
+*          PRN >= MINPRNBDS3 is always BDS-3.
+*-----------------------------------------------------------------------------*/
+extern int bds_gen(int prn)
+{
+    if (prn<MINPRNCMP||MAXPRNCMP<prn) return 0;
+    if (MINPRNBDS3<=prn) return BDSGEN_3;
+    return bdsgen_[prn];
 }
 /* satellite id to satellite number --------------------------------------------
 * convert satellite id to satellite number

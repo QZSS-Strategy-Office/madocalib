@@ -1,9 +1,9 @@
 /*------------------------------------------------------------------------------
 * ppp_ar.c : ppp ambiguity resolution
 *
-*          Copyright (C) 2023-2025 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2023-2026 Cabinet Office, Japan, All rights reserved.
 *          Copyright (C) 2023-2024 Japan Aerospace Exploration Agency. All Rights Reserved.
-*          Copyright (C) 2024-2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+*          Copyright (C) 2024-2026 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2012-2015 by T.TAKASU, All rights reserved.
 *
 * reference :
@@ -26,6 +26,9 @@
 *           2024/09/27  1.7  delete NM
 *           2025/03/18  1.8  support triple/quad-frequency ppp-ar.
 *                            support bds-2 and bds-3.
+*           2026/10/30  1.9  add is_bds3_igso() for BDS-3 IGSO satellites
+*                            given by pos2-bds3igso (BeiDou PRN reassignment
+*                            in April 2026).
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -76,6 +79,16 @@ static void get_wavelength(int sat, double *lam)
         if (freq>0.0) lam[i]=CLIGHT/freq;
         else          lam[i]=0.0;
     }
+}
+/* BDS-3 IGSO satellite -------------------------------------------------------
+* BDS-3 satellite listed by pos2-bds3igso (default: C06-C08)
+*-----------------------------------------------------------------------------*/
+static int is_bds3_igso(int sat)
+{
+    int prn;
+    
+    if (satsys_bd2(sat,&prn)!=SYS_CMP) return 0;
+    return is_bds3igso(prn);
 }
 /* exclude satellite ---------------------------------------------------------*/
 static int exc_sat_sd(rtk_t *rtk, const obsd_t *obs, int exc,
@@ -136,9 +149,7 @@ static int gen_sat_sd(rtk_t *rtk, const obsd_t *obs, int n, const int *exc,
             if (stat) continue;
             
             /* exclude IGSO for reference satellite */
-            if (obs[j].sat==satid2no("C38")||
-                obs[j].sat==satid2no("C39")||
-                obs[j].sat==satid2no("C40")) continue;
+            if (is_bds3_igso(obs[j].sat)) continue;
             
             if (azel[1+j*2]>maxel) {
                 maxel =azel[1+j*2];
@@ -691,9 +702,7 @@ static int exc_sat_par(rtk_t *rtk, int *sat1, int *sat2,
             el-=offset;
         }
         else if (sys&SYS_CMP) {
-            if (sat1[i]==satid2no("C38")||
-                sat1[i]==satid2no("C39")||
-                sat1[i]==satid2no("C40")) el-=offset;
+            if (is_bds3_igso(sat1[i])) el-=offset;
         }
         else if (sys&SYS_QZS) {
             el-=offset;

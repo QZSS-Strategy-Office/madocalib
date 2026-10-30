@@ -154,6 +154,14 @@ class VariablesOptions:
     combo_pos2_sigbds2: ttk.Combobox | None = None
     combo_pos2_sigbds3: ttk.Combobox | None = None
 
+    # BDS-2 satellites in PRN 1-18 (pos2-bds2prn)
+    label_pos2_bds2prn: tk.Label | None = None
+    entry_pos2_bds2prn: tk.Entry | None = None
+
+    # BDS-3 IGSO satellites (pos2-bds3igso)
+    label_pos2_bds3igso: tk.Label | None = None
+    entry_pos2_bds3igso: tk.Entry | None = None
+
     # --- Output ---
     label_out_solformat: tk.Label | None = None
     label_out_outhead_outopt: tk.Label | None = None
@@ -349,6 +357,8 @@ class VariablesOptions:
             "pos2-siggal": "",
             "pos2-sigbds2": "",
             "pos2-sigbds3": "",
+            "pos2-bds2prn": "",
+            "pos2-bds3igso": "",
             # --- Output ---
             "out-solformat": "",
             "out-outhead": "",

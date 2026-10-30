@@ -2,7 +2,7 @@
 * mdccssr.c : QZSS L6E signal MADOCA-PPP Compact SSR message decode functions
 *
 * Copyright (C) 2023-2024 TOSHIBA ELECTRONIC TECHNOLOGIES CORPORATION. All Rights Reserved.
-* Copyright (C) 2024-2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+* Copyright (C) 2024-2026 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *
 * references :
 *     [1]  CAO IS-QZSS-MDC-004, May, 2025
@@ -32,6 +32,10 @@
 *           2025/05/20 1.5  support BeiDou.
 *                           separate GPS L5 Q and L5 I+Q for ssr bias applied signals.
 *                           fix bug on signal mask of QZSS L6D, L6P, L6E and L1C/B
+*           2026/10/30 1.6  support BDS-3 satellites in GNSS ID 3 (PRN 1-18)
+*                           (IS-QZSS-MDC revision): apply cssr_sig_bd3 to
+*                           BDS-3 satellites in GNSS ID 3 (satsys_bd2()),
+*                           skip undefined signals
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -137,6 +141,7 @@ typedef struct {
     int cellmask[MAXSAT];           /* Cellmask */
     int ncell[MAXSAT];              /* No. of cellmask flags */
     int siglist[MCSSR_MAX_SYS][MCSSR_MAX_SIGMASK];/* 0:Terminate,1...:CODE_xxx */
+    int siglist_bd3[MCSSR_MAX_SIGMASK]; /* signal list of BDS-3 in GNSS ID 3 */
     int nsat[MCSSR_MAX_SYS];        /* No. of sat */
     int nsig[MCSSR_MAX_SYS];        /* No. of signal */
     int ns;                         /* total No. of */
@@ -148,6 +153,25 @@ typedef struct {
 } mcssr_t;
 
 mcssr_t _mcssr[MCSSR_MAX_PRN]={{{0}}};
+
+/* signal code of a satellite --------------------------------------------------
+* for GNSS ID 3 (BDS, PRN 1-18) and a BDS-3 satellite (satsys_bd2(), given by
+* pos2-bds2prn), the signal mask is read by the GNSS ID 7 (BDS-3) table
+* cssr_sig_bd3 (IS-QZSS-MDC revision). other cases return the code of siglist.
+* args   : mcssr_t *mc  I   cssr control
+*          int gnssid   I   Compact SSR GNSS ID
+*          int sat      I   satellite number (0: unsupported)
+*          int k        I   index of siglist
+* return : code (0: undefined)
+*-----------------------------------------------------------------------------*/
+static int mcssr_sigcode(const mcssr_t *mc, const int gnssid, const int sat,
+                         const int k)
+{
+    if (gnssid==MCSSR_SYS_BDS&&sat>0&&satsys_bd2(sat,NULL)==SYS_CMP) {
+        return mc->siglist_bd3[k];
+    }
+    return mc->siglist[gnssid][k];
+}
 
 /* count 16 bit flags --------------------------------------------------------*/
 static int flgcnt16(const uint16_t flg)
@@ -298,6 +322,9 @@ static int decode_mcssr_mask(mcssr_t *mc, int i)
         cmaflg   = getbitu(mc->buff, i,  1); i+= 1;     /* Cell-mask Avail.Flag */
         nsat = svmask2list (svmask,  gnssid,&mc->satlist[mc->ns], &mc->gidlist[mc->ns]);
         nsig = sigmask2list(sigmask, gnssid, mc->siglist[gnssid]);
+        if (gnssid==MCSSR_SYS_BDS) { /* BDS-3 satellites in GNSS ID 3 */
+            sigmask2list(sigmask, MCSSR_SYS_BD3, mc->siglist_bd3);
+        }
 
         trace(4,"decode_mcssr_mask: gnssid=%d,svmask=0x%02X%08X,sigmask=0x%X,cmaflg=%d,nsat=%d,nsig=%d\n",
             gnssid, (uint8_t)(svmask>>32), (uint32_t)(svmask), sigmask, cmaflg, nsat, nsig);
@@ -431,7 +458,7 @@ static int decode_mcssr_cc(mcssr_t *mc, ssr_t *ssr, int i, int apply)
 /* decode MADOCA-PPP L6E CSSR ST4 code bias ----------------------------------*/
 static int decode_mcssr_cb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
 {
-    int j, k, sync, iod, ep, sat, nsig, mask, cb, flg;
+    int j, k, sync, iod, ep, sat, nsig, mask, cb, flg, code;
     int vcbias[MAXCODE]={0};
     double udint,cbias[MAXCODE];
     char satid[8];
@@ -469,13 +496,16 @@ static int decode_mcssr_cb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
 
                 if(sat == 0) continue; /* unsupprted sat */
 
-                cbias [mc->siglist[mc->gidlist[j]][k]-1] = cb * 0.02;
-                vcbias[mc->siglist[mc->gidlist[j]][k]-1] = 1; /* 1:output */
+                code = mcssr_sigcode(mc, mc->gidlist[j], sat, k);
+                if(code <= 0) continue; /* undefined signal */
+
+                cbias [code-1] = cb * 0.02;
+                vcbias[code-1] = 1; /* 1:output */
                 
                 if(cb == MCSSR_INVALID_11BIT) { /* invalid value */
-                    cbias [mc->siglist[mc->gidlist[j]][k]-1]=SSR_INVALID_CBIAS;
+                    cbias [code-1]=SSR_INVALID_CBIAS;
                     trace(3,"decode_mcssr_pb: invalid cbias %s %s %s\n",
-                        time_str(mc->gt,3),satid,code2obs(mc->siglist[mc->gidlist[j]][k]));
+                        time_str(mc->gt,3),satid,code2obs(code));
                 }
             }
             mask >>= 1;
@@ -497,7 +527,7 @@ static int decode_mcssr_cb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
 /* decode MADOCA-PPP L6E CSSR ST5 phase bias ---------------------------------*/
 static int decode_mcssr_pb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
 {
-    int j, k, sync, iod, ep, sat, nsig, mask, pb, di, flg;
+    int j, k, sync, iod, ep, sat, nsig, mask, pb, di, flg, code;
     int discnt[MAXCODE]={0},vpbias[MAXCODE]={0};
     double udint,pbias[MAXCODE];
     char satid[8];
@@ -536,12 +566,15 @@ static int decode_mcssr_pb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
 
                 if(sat == 0) continue; /* unsupprted sat */
 
-                pbias [mc->siglist[mc->gidlist[j]][k]-1] = pb * 0.001;
-                vpbias[mc->siglist[mc->gidlist[j]][k]-1] = 1; /* 1:output */
-                discnt[mc->siglist[mc->gidlist[j]][k]-1] = di;
+                code = mcssr_sigcode(mc, mc->gidlist[j], sat, k);
+                if(code <= 0) continue; /* undefined signal */
+
+                pbias [code-1] = pb * 0.001;
+                vpbias[code-1] = 1; /* 1:output */
+                discnt[code-1] = di;
                 
                 if(pb == MCSSR_INVALID_15BIT) {/* invalid value */
-                    pbias [mc->siglist[mc->gidlist[j]][k]-1] = SSR_INVALID_PBIAS;
+                    pbias [code-1] = SSR_INVALID_PBIAS;
                 }
             }
             mask >>= 1;

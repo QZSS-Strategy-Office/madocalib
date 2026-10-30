@@ -1,8 +1,8 @@
 /*------------------------------------------------------------------------------
 * rtkpos.c : precise positioning
 *
-*          Copyright (C) 2023-2025 Cabinet Office, Japan, All rights reserved.
-*          Copyright (C) 2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+*          Copyright (C) 2023-2026 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2025-2026 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2007-2020 by T.TAKASU, All rights reserved.
 *
 * version : $Revision: 1.1 $ $Date: 2008/07/17 21:48:06 $
@@ -52,6 +52,8 @@
 *           2024/01/10 1.18 support MADOCA-PPP ionospheric corrections
 *                           change rtkinit(), rtkpos()
 *           2025/03/10 1.19 delete signal_replace(), signal_sel_ppp()
+*           2026/10/30 1.20 rtkinit(): apply pos2-bds2prn by set_bds2prn()
+*                           and pos2-bds3igso by set_bds3igso()
 *-----------------------------------------------------------------------------*/
 #include <stdarg.h>
 #include "rtklib.h"
@@ -1669,7 +1671,7 @@ extern void rtkinit(rtk_t *rtk, const prcopt_t *opt)
     int i;
     
     trace(3,"rtkinit :\n");
-    
+
     rtk->sol=sol0;
     for (i=0;i<6;i++) rtk->rb[i]=0.0;
     rtk->nx=opt->mode<=PMODE_FIXED?NX(opt):pppnx(opt);
@@ -1686,6 +1688,19 @@ extern void rtkinit(rtk_t *rtk, const prcopt_t *opt)
     }
     for (i=0;i<MAXERRMSG;i++) rtk->errbuf[i]=0;
     rtk->opt=*opt;
+    
+    /* BDS-2 satellites in PRN 1-18 */
+    if (set_bds2prn(opt->bds2prn)<0) {
+        trace(1,"rtkinit : invalid pos2-bds2prn=%s (all BDS-3)\n",
+              opt->bds2prn);
+        errmsg(rtk,"invalid pos2-bds2prn=%s (all BDS-3)\n",opt->bds2prn);
+    }
+    /* BDS-3 IGSO satellites */
+    if (set_bds3igso(opt->bds3igso)<0) {
+        trace(1,"rtkinit : invalid pos2-bds3igso=%s (C06-C08)\n",
+              opt->bds3igso);
+        errmsg(rtk,"invalid pos2-bds3igso=%s (C06-C08)\n",opt->bds3igso);
+    }
     for (i=0;i<2;i++) rtk->miono_info[i]=0;
     for (i=0;i<6;i++) rtk->prev_qr[i]=0;
 }

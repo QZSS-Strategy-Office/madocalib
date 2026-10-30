@@ -16,7 +16,7 @@ from core.runtime import init_settings, set_window_icon
 from ui.eventbus import start as start_ui_bus
 
 # The version displayed on the title bar (kept for backward compatibility).
-__version__ = "2.1"
+__version__ = "2.2"
 WINDOW_SIZE = "610x395"
 
 

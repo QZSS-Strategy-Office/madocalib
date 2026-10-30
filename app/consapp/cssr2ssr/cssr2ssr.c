@@ -1,12 +1,15 @@
 /*------------------------------------------------------------------------------
 * cssr2ssr : convert cssr message file to ssr message file
 *
-* Copyright (c) 2024-2025 Cabinet Office, Japan, All rights reserved.
-* Copyright (c) 2022-2025, Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+* Copyright (c) 2024-2026 Cabinet Office, Japan, All rights reserved.
+* Copyright (c) 2022-2026, Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *
 * author  : LHTC
 * history : 2022/02/03 1.0  new
 *           2025/03/18 1.1 use CSSR_MAXNSIG instead of MAXCODE
+*           2026/10/30 1.2 add option -bds2prn (BDS-2 satellites in PRN 1-18)
+*                          get_sizeof_subtype_ncell(): count signal mask bits
+*                          of undefined signals (same as decode in cssr.c)
 *
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
@@ -96,7 +99,7 @@ static int get_sizeof_subtype_ncell(cssr_t *cssr, int nb)
             if (!cssr_mask->sat_mask[i][k]) continue;
             isig=-1;
             for (l=0;l<CSSR_MAXNSIG;l++) {
-                if (!cssr_mask->sig_mask[i][l]) continue;
+                if (!cssr_mask->sig_bit[i][l]) continue; /* bit not set */
                 isig++;
                 if (!cssr_mask->cell_mask[i][isig+cssr_mask->nsig[i]*isat]) continue;
                 nbit+=nb;
@@ -541,6 +544,9 @@ static int cssr2ssr(const char *ifile, const char *ofile, gtime_t time)
 *    -o file        output ssr file
 *    -t level       log level of tracefile. 0:no output, 1-4 [default : 0]
 *    -d             dump debug log on decoding cssr          [default : no dump]
+*    -bds2prn list  BDS-2 satellites in PRN 1-18 (GNSS ID 3), e.g. C09,C10
+*                   (other satellites in GNSS ID 3 are BDS-3)
+*                   [default : no BDS-2]
 *    file           input cssr file
 *
 *-----------------------------------------------------------------------------*/
@@ -558,6 +564,11 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i],"-d"))           cssr_dump_set(0);
         else if (!strcmp(argv[i],"-td")&&i+1<argc) {
             sscanf(argv[++i],"%lf/%lf/%lf",ep,ep+1,ep+2);
+        }
+        else if (!strcmp(argv[i],"-bds2prn")&&i+1<argc) {
+            if (set_bds2prn(argv[++i])<0) {
+                fprintf(stderr,"invalid -bds2prn list: %s\n",argv[i]);
+            }
         }
         else ifile=argv[i];
     }

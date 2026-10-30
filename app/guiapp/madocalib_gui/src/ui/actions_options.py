@@ -405,6 +405,10 @@ def load_file_conf(parent, variables_options, filepath: str) -> str | None:
 
     # Reset the schema and tooltip text.
     variables_options.reset_conf_schema()
+    # Clear pos2-bds2prn; a conf without the line means "".
+    set_entry_value(variables_options.entry_pos2_bds2prn, "")
+    # Clear pos2-bds3igso; a conf without the line means "" (C06-C08).
+    set_entry_value(variables_options.entry_pos2_bds3igso, "")
     post("set_tooltip_opt", text=filepath)
     update_conf_file(filepath)
 
@@ -574,6 +578,10 @@ def load_file_conf(parent, variables_options, filepath: str) -> str | None:
                 set_entry_value(variables_options.combo_pos2_sigbds2, value)
             case "pos2-sigbds3":
                 set_entry_value(variables_options.combo_pos2_sigbds3, value)
+            case "pos2-bds2prn":
+                set_entry_value(variables_options.entry_pos2_bds2prn, value)
+            case "pos2-bds3igso":
+                set_entry_value(variables_options.entry_pos2_bds3igso, value)
 
             # --- Output ---
             case "out-solformat":
@@ -868,6 +876,10 @@ def save_file_conf(option_window, variables_options, filepath: str) -> str | Non
                 val = variables_options.combo_pos2_sigbds2.get()
             case "pos2-sigbds3":
                 val = variables_options.combo_pos2_sigbds3.get()
+            case "pos2-bds2prn":
+                val = variables_options.entry_pos2_bds2prn.get()
+            case "pos2-bds3igso":
+                val = variables_options.entry_pos2_bds3igso.get()
 
             # --- Output ---
             case "out-solformat":
