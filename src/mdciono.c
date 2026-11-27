@@ -2,7 +2,7 @@
 * mdciono.c : QZSS L6D signal MADOCA-PPP wide area ionospheric correction message decode functions
 *
 * Copyright (C) 2024 TOSHIBA ELECTRONIC TECHNOLOGIES CORPORATION. All Rights Reserved.
-* Copyright (C) 2024 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+* Copyright (C) 2024-2026 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *
 * references :
 *     [1]  CAO IS-QZSS-MDC-002, November, 2023
@@ -15,6 +15,8 @@
 *           2024/09/27 1.3  fix bug for incorrect maxframe calculation
 *                           in decode_qzss_l6dmsg().
 *                           support multiple inputs of l6d stream.
+*           2026/11/27 1.4  fix bug on coefficient of STEC 2nd order term
+*                           (C20) in miono_delay().
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -466,7 +468,7 @@ static double miono_delay(const nav_t *nav, const int sat, const miono_area_t *a
     stec = c[0];                    /* STEC poly.coef.{C00,C01,C10,C11,C02,C20} */
     if(a->type >= 1) stec += c[1] *    (ll[0] - a->ref[0]) + c[2] *    (ll[1] - a->ref[1]);
     if(a->type >= 2) stec += c[3] *    (ll[0] - a->ref[0])        *    (ll[1] - a->ref[1]);
-    if(a->type >= 3) stec += c[4] * SQR(ll[0] - a->ref[0]) + c[2] * SQR(ll[1] - a->ref[1]);
+    if(a->type >= 3) stec += c[4] * SQR(ll[0] - a->ref[0]) + c[5] * SQR(ll[1] - a->ref[1]);
 
     delay = fact * stec;
     trace(5,"miono_delay: sat=%d,fact=%5.3f,stec=%8.3f,delay=%7.3f,coef=%7.2f,%7.2f,%7.2f,%7.2f,%8.3f,%8.3f\n",

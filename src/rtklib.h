@@ -43,6 +43,7 @@
 *                           bds_gen(), BDSGEN_2, BDSGEN_3
 *                           add prcopt_t:bds3igso, set_bds3igso(),
 *                           is_bds3igso()
+*           2026/11/27 1.21 VER_MADOCALIB 2.3
 *-----------------------------------------------------------------------------*/
 #ifndef RTKLIB_H
 #define RTKLIB_H
@@ -74,7 +75,7 @@ extern "C" {
 /* constants -----------------------------------------------------------------*/
 
 #define VER_RTKLIB  "2.4.3"             /* library version */
-#define VER_MADOCALIB "2.2"
+#define VER_MADOCALIB "2.3"
 
 #define PATCH_LEVEL "b34"               /* patch level */
 

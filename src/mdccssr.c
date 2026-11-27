@@ -36,6 +36,9 @@
 *                           (IS-QZSS-MDC revision): apply cssr_sig_bd3 to
 *                           BDS-3 satellites in GNSS ID 3 (satsys_bd2()),
 *                           skip undefined signals
+*           2026/11/27 1.7  fix bug on signal mask shift skipped by continue
+*                           in code bias and phase bias decoding.
+*                           fix bug on writing ssr[-1] when sat=0.
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -488,7 +491,7 @@ static int decode_mcssr_cb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
         satno2id(sat, satid);
         nsig = mc->nsig[mc->gidlist[j]];
         mask = 1 << (nsig - 1);
-        for (k = 0; k < nsig; k++) {
+        for (k = 0; k < nsig; k++, mask >>= 1) {
             if((flg = (mc->cellmask[j] & mask))) {
                 cb = getbits(mc->buff, i, 11); i+=11; /* Code Bias */
                 trace(4,"decode_mcssr_cb: %s,i=%4d,j=%3d,k=%2d,sat=%s,flg=0x%2X,sig=%2d,cb=%5d,%6.2f\n",
@@ -508,9 +511,8 @@ static int decode_mcssr_cb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
                         time_str(mc->gt,3),satid,code2obs(code));
                 }
             }
-            mask >>= 1;
         }
-        if(apply) {
+        if(apply && sat > 0) {
             ssr[sat-1].t0[4]   = mc->gt;
             ssr[sat-1].udi[4]  = udint;
             ssr[sat-1].iod[4]  = iod;
@@ -556,7 +558,7 @@ static int decode_mcssr_pb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
         satno2id(sat, satid);
         nsig = mc->nsig[mc->gidlist[j]];
         mask = 1 << (nsig - 1);
-        for (k = 0; k < nsig; k++) {
+        for (k = 0; k < nsig; k++, mask >>= 1) {
             if((flg = (mc->cellmask[j] & mask))) {
                 pb = getbits(mc->buff, i, 15); i+=15; /* Phase Bias */
                 di = getbitu(mc->buff, i,  2); i+= 2; /* Discontinuity Indicator */
@@ -577,9 +579,8 @@ static int decode_mcssr_pb(mcssr_t *mc, ssr_t *ssr, int i, int apply)
                     pbias [code-1] = SSR_INVALID_PBIAS;
                 }
             }
-            mask >>= 1;
         }
-        if(apply) {
+        if(apply && sat > 0) {
             ssr[sat-1].t0[5]    = mc->gt;
             ssr[sat-1].udi[5]   = udint;
             ssr[sat-1].iod[5]   = iod;

@@ -1,8 +1,8 @@
 /*------------------------------------------------------------------------------
 * ppp.c : precise point positioning
 *
-*          Copyright (C) 2023-2025 Cabinet Office, Japan, All rights reserved.
-*          Copyright (C) 2024-2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+*          Copyright (C) 2023-2026 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024-2026 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2010-2020 by T.TAKASU, All rights reserved.
 *
 * options : -DIERS_MODEL  use IERS tide model
@@ -89,6 +89,8 @@
 *                           resolution is not performed.
 *           2025/03/18 1.24 support triple/quad-frequency ppp.
 *                           support bds-2 and bds-3.
+*           2026/11/27 1.25 fix bug on reading vcbias[-1] and vpbias[-1]
+*                           when ssr bias code is none.
 *-----------------------------------------------------------------------------*/
 #include "rtklib.h"
 
@@ -435,7 +437,7 @@ static int corr_meas(const obsd_t *obs, const nav_t *nav, const double *azel,
                 tstr,satid,code2obs(obs->code[i]),code2obs(ssrcode),cb);
         }
         else {
-            if (!nav->ssr[obs->sat-1].vcbias[ssrcode-1]) {
+            if (ssrcode==CODE_NONE||!nav->ssr[obs->sat-1].vcbias[ssrcode-1]) {
                 P[i]=0.0;
                 trace(tl>0?3:4,"corr_meas: %s cbias dose not exist. %s obscode=C%s ssrcode=C%s cbias=%7.3f\n",
                     tstr,satid,code2obs(obs->code[i]),code2obs(ssrcode),cb);
@@ -453,7 +455,7 @@ static int corr_meas(const obsd_t *obs, const nav_t *nav, const double *azel,
                 tstr,satid,code2obs(obs->code[i]),code2obs(ssrcode),pb);
         }
         else if (sys!=SYS_GLO) {
-            if (!nav->ssr[obs->sat-1].vpbias[ssrcode-1]) {
+            if (ssrcode==CODE_NONE||!nav->ssr[obs->sat-1].vpbias[ssrcode-1]) {
                 L[i]=0.0;
                 trace(tl>0?3:4,"corr_meas: %s pbias dose not exist. %s obscode=C%s ssrcode=C%s pbias=%7.3f\n",
                     tstr,satid,code2obs(obs->code[i]),code2obs(ssrcode),pb);

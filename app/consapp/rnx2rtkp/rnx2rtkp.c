@@ -1,8 +1,8 @@
 /*------------------------------------------------------------------------------
 * rnx2rtkp.c : read rinex obs/nav files and compute receiver positions
 *
-*          Copyright (C) 2024-2025 Cabinet Office, Japan, All rights reserved.
-*          Copyright (C) 2024-2025 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
+*          Copyright (C) 2024-2026 Cabinet Office, Japan, All rights reserved.
+*          Copyright (C) 2024-2026 Lighthouse Technology & Consulting Co. Ltd., All rights reserved.
 *          Copyright (C) 2007-2016 by T.TAKASU, All rights reserved.
 *
 * version : $Revision: 1.1 $ $Date: 2008/07/17 21:55:16 $
@@ -23,6 +23,7 @@
 *           2024/09/27  1.12 -mdciono option can be specified up to three.
 *                            add option -ant
 *           2025/03/18  1.13 hundle signal options.
+*           2026/11/27  1.14 fix bug on missing break in option -sys.
 *-----------------------------------------------------------------------------*/
 #include <stdarg.h>
 #include "rtklib.h"
@@ -170,12 +171,12 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i],"-sys")&&i+1<argc) {
             for (p=argv[++i];*p;p++) {
                 switch (*p) {
-                    case 'G': prcopt.navsys|=SYS_GPS;
-                    case 'R': prcopt.navsys|=SYS_GLO;
-                    case 'E': prcopt.navsys|=SYS_GAL;
-                    case 'J': prcopt.navsys|=SYS_QZS;
-                    case 'C': prcopt.navsys|=SYS_CMP;
-                    case 'I': prcopt.navsys|=SYS_IRN;
+                    case 'G': prcopt.navsys|=SYS_GPS; break;
+                    case 'R': prcopt.navsys|=SYS_GLO; break;
+                    case 'E': prcopt.navsys|=SYS_GAL; break;
+                    case 'J': prcopt.navsys|=SYS_QZS; break;
+                    case 'C': prcopt.navsys|=SYS_CMP; break;
+                    case 'I': prcopt.navsys|=SYS_IRN; break;
                 }
                 if (!(p=strchr(p,','))) break;
             }
